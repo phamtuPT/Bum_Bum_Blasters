@@ -1,6 +1,4 @@
-
 # DROP BUM BUM
-
 
 ![Logo](https://i.imgur.com/xoLIhqy.png)
 
