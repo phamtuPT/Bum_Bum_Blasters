@@ -1,6 +1,6 @@
 # BÙM BUM BLASTERS
 
-![Logo](https://i.imgur.com/RvUNLl6.png)
+![Logo](https://i.imgur.com/J2EYArU.png)
 
 # 1. Thông tin tác giả
 - Họ và tên: Phạm Đình Tú
