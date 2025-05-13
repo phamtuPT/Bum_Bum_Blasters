@@ -80,6 +80,10 @@ constexpr int KILL_NOTIFICATION_DURATION = 2000; // 2 seconds
 constexpr int HEALTH_PICKUP_HEAL_AMOUNT = 50;
 constexpr int HEALTH_PICKUP_SPAWN_INTERVAL = 20000; // 20 seconds
 
+// Thêm hằng số cho thời gian hồi máu
+constexpr float HEALTH_REGEN_TIME = 2.5f;  // 2.5 seconds
+constexpr float HEALTH_REGEN_TICK = 0.1f;  // 0.1 second intervals
+
 // Game states
 enum class GameState { MENU, PLAYING, PAUSED, GAME_OVER };
 
@@ -335,6 +339,9 @@ public:
     bool isSpecialActive;        // Whether special ability is currently active
     float specialActivationTimer; // Timer for special ability activation
     int healthPickups;           // Count of health pickups collected
+    bool isRegeneratingHealth;
+    float healthRegenTimer;
+    float healthRegenTickTimer;
 
     Tank(float x_, float y_, SDL_Texture* tex, EnemyType type_ = EnemyType::BASIC)
         : x(x_), y(y_), vx(0), vy(0), angle(0),
@@ -344,7 +351,7 @@ public:
         width(150), height(50), collisionRadius(30),
         speed(1.0f), damage(10), type(type_), isPlayer(false),
         specialBullets(0), isSpecialActive(false), specialActivationTimer(0),
-        healthPickups(0) {
+        healthPickups(0), isRegeneratingHealth(false), healthRegenTimer(0), healthRegenTickTimer(0) {
 
         // Adjust properties based on enemy type
         if (type == EnemyType::FAST) {
@@ -393,6 +400,22 @@ public:
             shieldFrame = (shieldFrame + 1) % TANK_FRAME_COUNT;
             lastShieldFrameTime = currentTime;
         }
+
+        // Update health regeneration if active
+        if (isRegeneratingHealth) {
+            healthRegenTimer -= deltaTime;
+            healthRegenTickTimer -= deltaTime;
+
+            if (healthRegenTickTimer <= 0) {
+                // Reset tick timer
+                healthRegenTickTimer = HEALTH_REGEN_TICK;
+            }
+
+            if (healthRegenTimer <= 0) {
+                // Regeneration complete
+                isRegeneratingHealth = false;
+            }
+        }
     }
 
     void render(SDL_Renderer* renderer, float cameraX, float cameraY) {
@@ -425,9 +448,11 @@ public:
         SDL_Rect destRect = { static_cast<int>(x - width / 2 - cameraX),
                             static_cast<int>(y - height / 2 - cameraY),
                             width, height };
+
+        // Điều chỉnh tâm quay - đặt ở giữa xe tăng
         SDL_Point center;
-        center.x = width / 4;     // Rotation center
-        center.y = height / 2;    // 1/4 chiều cao
+        center.x = width / 2;     // Tâm quay ở giữa chiều rộng
+        center.y = height / 2;    // Tâm quay ở giữa chiều cao
 
         SDL_RenderCopyEx(renderer, currentTexture, &srcRect, &destRect, angle * 180.0 / M_PI, &center, SDL_FLIP_NONE);
 
@@ -861,6 +886,14 @@ private:
         Uint32 startTime;
         Uint32 duration;
     } screenShake;
+
+    // Thêm cấu trúc cho thông báo hồi máu vào class Game
+    struct {
+        bool active;
+        float timeLeft;
+        int amountHealed;
+    } healthRegenInfo;
+
     Uint32 lastSpawnTime;
     Uint32 lastPowerUpTime;
     Uint32 lastHealthPickupTime;
@@ -1004,6 +1037,7 @@ public:
         stats = {0, 0, 0, 1};
         rapidFire = {false, 0, 0, 0, 0};
         screenShake = {false, 0.0f, 0, 0};
+        healthRegenInfo = {false, 0, 0};
 
         // Initialize resources
         ResourceManager::init(renderer);
@@ -1081,6 +1115,9 @@ public:
         handleRapidFire(deltaTime);
         handleSpecialAbility(deltaTime);
 
+        // Update health regeneration info
+        updateHealthRegenInfo(deltaTime);
+
         // Update difficulty based on time
         updateDifficulty();
 
@@ -1128,8 +1165,8 @@ public:
         }
         killNotifications.erase(
             remove_if(killNotifications.begin(), killNotifications.end(),
-                [](const KillNotification& n) { return !n.active; }),
-            killNotifications.end()
+            [](const KillNotification& n) { return !n.active; }),
+        killNotifications.end()
         );
 
         // Handle collisions
@@ -1295,8 +1332,12 @@ private:
                 rapidFire.cooldownRemaining = RAPID_FIRE_COOLDOWN;
             }
             // Use health pickup
-            else if (e.key.keysym.sym == SDLK_s && player.healthPickups > 0) {
-                useHealthPickup();
+            else if (e.key.keysym.sym == SDLK_t) {
+                cout << "S key pressed. Health packs: " << player.healthPickups << endl;
+                if (player.healthPickups > 0) {
+                    useHealthPickup();
+                    cout << "Used health pack. New HP: " << player.hp << "/" << player.maxHp << endl;
+                }
             }
         } else if (e.type == SDL_KEYUP) {
             // Stop movement when keys are released
@@ -1315,8 +1356,19 @@ private:
     void useHealthPickup() {
         if (player.healthPickups <= 0 || player.hp >= player.maxHp) return;
 
-        player.hp = min(player.maxHp, player.hp + HEALTH_PICKUP_HEAL_AMOUNT);
+        int healAmount = min(player.maxHp - player.hp, HEALTH_PICKUP_HEAL_AMOUNT);
+        player.hp += healAmount;
         player.healthPickups--;
+
+        // Activate health regeneration effect
+        player.isRegeneratingHealth = true;
+        player.healthRegenTimer = HEALTH_REGEN_TIME;
+        player.healthRegenTickTimer = HEALTH_REGEN_TICK;
+
+        // Set health regen info for display
+        healthRegenInfo.active = true;
+        healthRegenInfo.timeLeft = HEALTH_REGEN_TIME;
+        healthRegenInfo.amountHealed = healAmount;
 
         // Play heal sound
         if (healSound) {
@@ -1326,6 +1378,11 @@ private:
         // Add healing particles
         SDL_Color healColor = {0, 255, 0, 255};
         particles.emitCircle(player.x, player.y, 40, 30, healColor, 60);
+
+        // Add notification
+        killNotifications.push_back(KillNotification("HEALTH +" + to_string(healAmount)));
+
+        cout << "Used health pack. Healed: " << healAmount << " New HP: " << player.hp << "/" << player.maxHp << endl;
     }
 
     void activateShield() {
@@ -2086,9 +2143,9 @@ private:
         // Render game border
         SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
         SDL_Rect borderRect = { BORDER_OFFSET - static_cast<int>(cameraX),
-                                BORDER_OFFSET - static_cast<int>(cameraY),
-                                MAP_WIDTH - 2 * BORDER_OFFSET,
-                                MAP_HEIGHT - 2 * BORDER_OFFSET };
+                            BORDER_OFFSET - static_cast<int>(cameraY),
+                            MAP_WIDTH - 2 * BORDER_OFFSET,
+                            MAP_HEIGHT - 2 * BORDER_OFFSET };
         SDL_RenderDrawRect(renderer, &borderRect);
 
         // Render bullets
@@ -2165,7 +2222,95 @@ private:
         }
 
         renderCooldowns();
+
+        // Render health regeneration info if active
+        if (healthRegenInfo.active) {
+            renderHealthRegenInfo();
+        }
     }
+
+    void updateHealthRegenInfo(float deltaTime) {
+        if (healthRegenInfo.active) {
+            healthRegenInfo.timeLeft -= deltaTime;
+
+            if (healthRegenInfo.timeLeft <= 0) {
+                healthRegenInfo.active = false;
+            }
+        }
+    }
+
+    void renderHealthRegenInfo() {
+        if (!healthRegenInfo.active) return;
+
+        // Hiển thị thông báo hồi máu ở giữa màn hình
+        string regenText = "HEALING: +" + to_string(healthRegenInfo.amountHealed) + " HP";
+
+        // Hiển thị thời gian còn lại
+        string timeText = "Time: " + to_string(static_cast<int>(healthRegenInfo.timeLeft * 10) / 10.0f) + "s";
+
+        // Vẽ nền cho thông báo
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 200);
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+        SDL_Rect bgRect = {WINDOW_WIDTH / 2 - 150, WINDOW_HEIGHT / 2 - 50, 300, 100};
+        SDL_RenderFillRect(renderer, &bgRect);
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+
+        // Vẽ viền
+        SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
+        SDL_RenderDrawRect(renderer, &bgRect);
+
+        // Hiển thị text
+        SDL_Color textColor = {0, 255, 0, 255};
+        SDL_Surface* regenSurface = TTF_RenderText_Solid(font, regenText.c_str(), textColor);
+        if (regenSurface) {
+            SDL_Texture* regenTexture = SDL_CreateTextureFromSurface(renderer, regenSurface);
+            SDL_Rect regenRect = {
+                WINDOW_WIDTH / 2 - regenSurface->w / 2,
+                WINDOW_HEIGHT / 2 - 30,
+                regenSurface->w,
+                regenSurface->h
+            };
+            SDL_RenderCopy(renderer, regenTexture, nullptr, &regenRect);
+            SDL_FreeSurface(regenSurface);
+            SDL_DestroyTexture(regenTexture);
+        }
+
+        SDL_Surface* timeSurface = TTF_RenderText_Solid(font, timeText.c_str(), textColor);
+        if (timeSurface) {
+            SDL_Texture* timeTexture = SDL_CreateTextureFromSurface(renderer, timeSurface);
+            SDL_Rect timeRect = {
+                WINDOW_WIDTH / 2 - timeSurface->w / 2,
+                WINDOW_HEIGHT / 2 + 10,
+                timeSurface->w,
+                timeSurface->h
+            };
+            SDL_RenderCopy(renderer, timeTexture, nullptr, &timeRect);
+            SDL_FreeSurface(timeSurface);
+            SDL_DestroyTexture(timeTexture);
+        }
+
+        // Hiển thị thanh tiến trình
+        float progress = healthRegenInfo.timeLeft / HEALTH_REGEN_TIME;
+        SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
+        SDL_Rect progressRect = {
+            WINDOW_WIDTH / 2 - 100,
+            WINDOW_HEIGHT / 2 + 40,
+            static_cast<int>(200 * progress),
+            10
+        };
+        SDL_RenderFillRect(renderer, &progressRect);
+
+        // Vẽ viền cho thanh tiến trình
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        SDL_Rect progressBorder = {
+            WINDOW_WIDTH / 2 - 100,
+            WINDOW_HEIGHT / 2 + 40,
+            200,
+            10
+        };
+        SDL_RenderDrawRect(renderer, &progressBorder);
+    }
+
 
     void renderCooldowns() {
         // Shield cooldown bar
