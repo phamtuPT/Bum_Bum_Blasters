@@ -15,6 +15,8 @@
 #include <random>
 #include <chrono>
 
+using namespace std;
+
 // Constants
 constexpr int WINDOW_WIDTH = 1500;
 constexpr int WINDOW_HEIGHT = 750;
@@ -64,6 +66,20 @@ constexpr int BUTTON_SPACING = 20;
 constexpr int SCREEN_SHAKE_DURATION = 300;
 constexpr float SCREEN_SHAKE_INTENSITY = 5.0f;
 
+// Special bullet constants
+constexpr int SPECIAL_BULLETS_REQUIRED = 10;  // Regular bullets needed to earn one special bullet
+constexpr int MAX_SPECIAL_BULLETS = 5;        // Maximum special bullets that can be accumulated
+constexpr float SPECIAL_ACTIVATION_TIME = 2.5f; // Time in seconds to hold right mouse button
+constexpr float SPECIAL_ZOOM_FACTOR = 1.5f;   // How much to zoom out camera
+constexpr int SPECIAL_LINE_LENGTH = 1000;     // Maximum length of targeting line
+
+// Kill notification constants
+constexpr int KILL_NOTIFICATION_DURATION = 2000; // 2 seconds
+
+// Health pickup constants
+constexpr int HEALTH_PICKUP_HEAL_AMOUNT = 50;
+constexpr int HEALTH_PICKUP_SPAWN_INTERVAL = 20000; // 20 seconds
+
 // Game states
 enum class GameState { MENU, PLAYING, PAUSED, GAME_OVER };
 
@@ -71,17 +87,17 @@ enum class GameState { MENU, PLAYING, PAUSED, GAME_OVER };
 enum class EnemyType { BASIC, FAST, HEAVY };
 
 // Power-up types
-enum class PowerUpType { HEALTH, SPEED, DAMAGE, SHIELD, RAPID_FIRE };
+enum class PowerUpType { HEALTH, SPEED, DAMAGE, SHIELD, RAPID_FIRE, HEALTH_PICKUP };
 
 // Random number generator
-std::mt19937 rng(std::chrono::steady_clock::now().time_since_epoch().count());
+mt19937 rng(chrono::steady_clock::now().time_since_epoch().count());
 
 // Resource Manager
 class ResourceManager {
 private:
-    static std::unordered_map<std::string, SDL_Texture*> textures;
-    static std::unordered_map<std::string, Mix_Chunk*> sounds;
-    static std::unordered_map<std::string, Mix_Music*> music;
+    static unordered_map<string, SDL_Texture*> textures;
+    static unordered_map<string, Mix_Chunk*> sounds;
+    static unordered_map<string, Mix_Music*> music;
 
 public:
     static void init(SDL_Renderer* renderer) {
@@ -90,6 +106,7 @@ public:
         loadTexture("enemy_tank.png", renderer);
         loadTexture("explosion.png", renderer);
         loadTexture("powerup.png", renderer);
+        loadTexture("health_pickup.png", renderer);
 
         // Load shield texture (recolored tank spritesheet)
         // Note: You need to create this texture with different colors
@@ -102,6 +119,7 @@ public:
         loadSound("powerup.mp3");
         loadSound("shield_activate.mp3");  // New sound for shield activation
         loadSound("shield_deactivate.mp3"); // New sound for shield deactivation
+        loadSound("heal.mp3"); // New sound for healing
 
         // Pre-load music
         loadMusic("background_music.mp3");
@@ -124,7 +142,7 @@ public:
         music.clear();
     }
 
-    static SDL_Texture* loadTexture(const std::string& path, SDL_Renderer* renderer) {
+    static SDL_Texture* loadTexture(const string& path, SDL_Renderer* renderer) {
         // Check if texture is already loaded
         auto it = textures.find(path);
         if (it != textures.end()) {
@@ -134,7 +152,7 @@ public:
         // Load new texture
         SDL_Surface* surface = IMG_Load(path.c_str());
         if (!surface) {
-            std::cerr << "Unable to load image " << path << "! SDL_image Error: " << IMG_GetError() << std::endl;
+            cerr << "Unable to load image " << path << "! SDL_image Error: " << IMG_GetError() << endl;
             return nullptr;
         }
 
@@ -142,7 +160,7 @@ public:
         SDL_FreeSurface(surface);
 
         if (!texture) {
-            std::cerr << "Unable to create texture from " << path << "! SDL_Error: " << SDL_GetError() << std::endl;
+            cerr << "Unable to create texture from " << path << "! SDL_Error: " << SDL_GetError() << endl;
             return nullptr;
         }
 
@@ -151,7 +169,7 @@ public:
     }
 
     // New function to create a recolored texture
-    static SDL_Texture* createRecoloredTexture(const std::string& sourcePath, const std::string& newPath,
+    static SDL_Texture* createRecoloredTexture(const string& sourcePath, const string& newPath,
                                               SDL_Renderer* renderer, Uint8 r, Uint8 g, Uint8 b) {
         // Check if the recolored texture already exists
         auto it = textures.find(newPath);
@@ -162,7 +180,7 @@ public:
         // Load source texture to surface
         SDL_Surface* sourceSurface = IMG_Load(sourcePath.c_str());
         if (!sourceSurface) {
-            std::cerr << "Unable to load image " << sourcePath << "! SDL_image Error: " << IMG_GetError() << std::endl;
+            cerr << "Unable to load image " << sourcePath << "! SDL_image Error: " << IMG_GetError() << endl;
             return nullptr;
         }
 
@@ -170,7 +188,7 @@ public:
         SDL_Surface* newSurface = SDL_CreateRGBSurfaceWithFormat(0, sourceSurface->w, sourceSurface->h,
                                                                 32, sourceSurface->format->format);
         if (!newSurface) {
-            std::cerr << "Unable to create surface! SDL Error: " << SDL_GetError() << std::endl;
+            cerr << "Unable to create surface! SDL Error: " << SDL_GetError() << endl;
             SDL_FreeSurface(sourceSurface);
             return nullptr;
         }
@@ -180,7 +198,7 @@ public:
 
         // Lock surface for pixel manipulation
         if (SDL_LockSurface(newSurface) < 0) {
-            std::cerr << "Unable to lock surface! SDL Error: " << SDL_GetError() << std::endl;
+            cerr << "Unable to lock surface! SDL Error: " << SDL_GetError() << endl;
             SDL_FreeSurface(sourceSurface);
             SDL_FreeSurface(newSurface);
             return nullptr;
@@ -199,9 +217,9 @@ public:
             // Only modify non-transparent pixels
             if (sa > 0) {
                 // Simple color shift - you can implement more complex recoloring logic
-                Uint8 nr = std::min(255, static_cast<int>(sr * r / 255));
-                Uint8 ng = std::min(255, static_cast<int>(sg * g / 255));
-                Uint8 nb = std::min(255, static_cast<int>(sb * b / 255));
+                Uint8 nr = min(255, static_cast<int>(sr * r / 255));
+                Uint8 ng = min(255, static_cast<int>(sg * g / 255));
+                Uint8 nb = min(255, static_cast<int>(sb * b / 255));
 
                 pixels[i] = SDL_MapRGBA(format, nr, ng, nb, sa);
             }
@@ -217,7 +235,7 @@ public:
         SDL_FreeSurface(newSurface);
 
         if (!newTexture) {
-            std::cerr << "Unable to create texture! SDL Error: " << SDL_GetError() << std::endl;
+            cerr << "Unable to create texture! SDL Error: " << SDL_GetError() << endl;
             return nullptr;
         }
 
@@ -226,7 +244,7 @@ public:
         return newTexture;
     }
 
-    static SDL_Texture* getTexture(const std::string& path) {
+    static SDL_Texture* getTexture(const string& path) {
         auto it = textures.find(path);
         if (it != textures.end()) {
             return it->second;
@@ -234,7 +252,7 @@ public:
         return nullptr;
     }
 
-    static Mix_Chunk* loadSound(const std::string& path) {
+    static Mix_Chunk* loadSound(const string& path) {
         // Check if sound is already loaded
         auto it = sounds.find(path);
         if (it != sounds.end()) {
@@ -244,7 +262,7 @@ public:
         // Load new sound
         Mix_Chunk* sound = Mix_LoadWAV(path.c_str());
         if (!sound) {
-            std::cerr << "Unable to load sound " << path << "! SDL_mixer Error: " << Mix_GetError() << std::endl;
+            cerr << "Unable to load sound " << path << "! SDL_mixer Error: " << Mix_GetError() << endl;
             return nullptr;
         }
 
@@ -252,7 +270,7 @@ public:
         return sound;
     }
 
-    static Mix_Chunk* getSound(const std::string& path) {
+    static Mix_Chunk* getSound(const string& path) {
         auto it = sounds.find(path);
         if (it != sounds.end()) {
             return it->second;
@@ -260,7 +278,7 @@ public:
         return nullptr;
     }
 
-    static Mix_Music* loadMusic(const std::string& path) {
+    static Mix_Music* loadMusic(const string& path) {
         // Check if music is already loaded
         auto it = music.find(path);
         if (it != music.end()) {
@@ -270,7 +288,7 @@ public:
         // Load new music
         Mix_Music* mus = Mix_LoadMUS(path.c_str());
         if (!mus) {
-            std::cerr << "Unable to load music " << path << "! SDL_mixer Error: " << Mix_GetError() << std::endl;
+            cerr << "Unable to load music " << path << "! SDL_mixer Error: " << Mix_GetError() << endl;
             return nullptr;
         }
 
@@ -278,7 +296,7 @@ public:
         return mus;
     }
 
-    static Mix_Music* getMusic(const std::string& path) {
+    static Mix_Music* getMusic(const string& path) {
         auto it = music.find(path);
         if (it != music.end()) {
             return it->second;
@@ -288,9 +306,9 @@ public:
 };
 
 // Initialize static members
-std::unordered_map<std::string, SDL_Texture*> ResourceManager::textures;
-std::unordered_map<std::string, Mix_Chunk*> ResourceManager::sounds;
-std::unordered_map<std::string, Mix_Music*> ResourceManager::music;
+unordered_map<string, SDL_Texture*> ResourceManager::textures;
+unordered_map<string, Mix_Chunk*> ResourceManager::sounds;
+unordered_map<string, Mix_Music*> ResourceManager::music;
 
 // Tank Class
 class Tank {
@@ -313,14 +331,20 @@ public:
     int damage;
     EnemyType type;
     bool isPlayer; // Flag to indicate if this is the player tank
+    int specialBullets;          // Count of special bullets accumulated
+    bool isSpecialActive;        // Whether special ability is currently active
+    float specialActivationTimer; // Timer for special ability activation
+    int healthPickups;           // Count of health pickups collected
 
     Tank(float x_, float y_, SDL_Texture* tex, EnemyType type_ = EnemyType::BASIC)
         : x(x_), y(y_), vx(0), vy(0), angle(0),
-          texture(tex), shieldTexture(nullptr), lastShotTime(0), alive(true),
-          hp(100), maxHp(100), isShooting(false), isShielding(false),
-          currentFrame(0), shieldFrame(0), lastFrameTime(0), lastShieldFrameTime(0),
-          width(150), height(50), collisionRadius(30),
-          speed(1.0f), damage(10), type(type_) {
+        texture(tex), shieldTexture(nullptr), lastShotTime(0), alive(true),
+        hp(100), maxHp(100), isShooting(false), isShielding(false),
+        currentFrame(0), shieldFrame(0), lastFrameTime(0), lastShieldFrameTime(0),
+        width(150), height(50), collisionRadius(30),
+        speed(1.0f), damage(10), type(type_), isPlayer(false),
+        specialBullets(0), isSpecialActive(false), specialActivationTimer(0),
+        healthPickups(0) {
 
         // Adjust properties based on enemy type
         if (type == EnemyType::FAST) {
@@ -360,8 +384,8 @@ public:
         vy *= 0.95f;
 
         // Set velocity to 0 if it's very small
-        if (std::abs(vx) < 0.01f) vx = 0;
-        if (std::abs(vy) < 0.01f) vy = 0;
+        if (abs(vx) < 0.01f) vx = 0;
+        if (abs(vy) < 0.01f) vy = 0;
 
         // Update shield animation if active
         Uint32 currentTime = SDL_GetTicks();
@@ -372,47 +396,63 @@ public:
     }
 
     void render(SDL_Renderer* renderer, float cameraX, float cameraY) {
-    if (!alive) return;
+        if (!alive) return;
 
-    Uint32 currentTime = SDL_GetTicks();
+        Uint32 currentTime = SDL_GetTicks();
 
-    // Determine which texture and frame to use
-    SDL_Texture* currentTexture = texture;
-    int frame = 0;
+        // Determine which texture and frame to use
+        SDL_Texture* currentTexture = texture;
+        int frame = 0;
 
-    if (isShielding && shieldTexture != nullptr) {
-        // Use shield texture with animation frames
-        currentTexture = shieldTexture;
-        frame = shieldFrame;
-    } else if (isShooting) {
-        // Normal shooting animation
-        if (currentTime - lastFrameTime >= TANK_FRAME_DELAY) {
-            currentFrame++;
-            if (currentFrame >= TANK_FRAME_COUNT) {
-                currentFrame = 0;
-                isShooting = false;
+        if (isShielding && shieldTexture != nullptr) {
+            // Use shield texture with animation frames
+            currentTexture = shieldTexture;
+            frame = shieldFrame;
+        } else if (isShooting) {
+            // Normal shooting animation
+            if (currentTime - lastFrameTime >= TANK_FRAME_DELAY) {
+                currentFrame++;
+                if (currentFrame >= TANK_FRAME_COUNT) {
+                    currentFrame = 0;
+                    isShooting = false;
+                }
+                lastFrameTime = currentTime;
             }
-            lastFrameTime = currentTime;
+            frame = currentFrame;
         }
-        frame = currentFrame;
-    }
 
-    SDL_Rect srcRect = { frame * TANK_FRAME_WIDTH, 0, TANK_FRAME_WIDTH, TANK_FRAME_HEIGHT };
-    SDL_Rect destRect = { static_cast<int>(x - width / 2 - cameraX),
-                          static_cast<int>(y - height / 2 - cameraY),
-                          width, height };
-    SDL_Point center;
-    center.x = width / 4;     // 1/2 chiều rộng
-    center.y = height / 2;    // 1/4 chiều cao
+        SDL_Rect srcRect = { frame * TANK_FRAME_WIDTH, 0, TANK_FRAME_WIDTH, TANK_FRAME_HEIGHT };
+        SDL_Rect destRect = { static_cast<int>(x - width / 2 - cameraX),
+                            static_cast<int>(y - height / 2 - cameraY),
+                            width, height };
+        SDL_Point center;
+        center.x = width / 4;     // Rotation center
+        center.y = height / 2;    // 1/4 chiều cao
 
-    // Sử dụng &center thay vì ¢er
-    SDL_RenderCopyEx(renderer, currentTexture, &srcRect, &destRect, angle * 180.0 / M_PI, &center, SDL_FLIP_NONE);
+        SDL_RenderCopyEx(renderer, currentTexture, &srcRect, &destRect, angle * 180.0 / M_PI, &center, SDL_FLIP_NONE);
+
+        // Debug: Draw green outline around tank
+        SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
+        SDL_RenderDrawRect(renderer, &destRect);
+
+        // Debug: Draw red dot at rotation center
+        int rotCenterX = destRect.x + center.x;
+        int rotCenterY = destRect.y + center.y;
+        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+        SDL_Rect rotCenter = {rotCenterX - 2, rotCenterY - 2, 4, 4};
+        SDL_RenderFillRect(renderer, &rotCenter);
+
+        // Debug: Draw blue dot at tank center
+        int tankCenterX = destRect.x + width / 2;
+        int tankCenterY = destRect.y + height / 2;
+        SDL_SetRenderDrawColor(renderer, 0, 0, 255, 255);
+        SDL_Rect tankCenter = {tankCenterX - 2, tankCenterY - 2, 4, 4};
+        SDL_RenderFillRect(renderer, &tankCenter);
     }
 
     void renderHealthBar(SDL_Renderer* renderer, float cameraX, float cameraY) {
-        if (!alive || isPlayer) return; // Không hiển thị thanh máu cho người chơi
-        
-        // Phần code còn lại giữ nguyên
+        if (!alive || isPlayer) return; // Don't show health bar for player
+
         int barWidth = width;
         int barHeight = 5;
         int offsetY = -(height / 2 + 10);
@@ -428,6 +468,13 @@ public:
                             static_cast<int>(barWidth * hpRatio), barHeight };
         SDL_RenderFillRect(renderer, &hpRect);
     }
+
+    // Get bullet spawn position (for both regular and special bullets)
+    void getBulletSpawnPosition(float& outX, float& outY) {
+        // Calculate position at the front of the tank barrel
+        outX = x + collisionRadius * cos(angle);
+        outY = y + collisionRadius * sin(angle);
+    }
 };
 
 // Bullet Class
@@ -437,10 +484,11 @@ public:
     bool active;
     bool fromEnemy;
     int damage;
+    bool isSpecial;
 
-    Bullet(float x_, float y_, float vx_, float vy_, bool enemy, int damage_ = 10)
+    Bullet(float x_, float y_, float vx_, float vy_, bool enemy, int damage_ = 10, bool special = false)
         : x(x_), y(y_), vx(vx_), vy(vy_),
-          active(true), fromEnemy(enemy), damage(damage_) {}
+          active(true), fromEnemy(enemy), damage(damage_), isSpecial(special) {}
 
     void update(float deltaTime) {
         if (!active) return;
@@ -454,9 +502,18 @@ public:
 
     void render(SDL_Renderer* renderer, float cameraX, float cameraY) {
         if (!active) return;
-        SDL_SetRenderDrawColor(renderer, fromEnemy ? 0 : 255, 0, fromEnemy ? 255 : 0, 255);
-        SDL_Rect rect = { static_cast<int>(x - 3 - cameraX), static_cast<int>(y - 3 - cameraY), 6, 6 };
-        SDL_RenderFillRect(renderer, &rect);
+
+        if (isSpecial) {
+            // Special bullets are larger and purple
+            SDL_SetRenderDrawColor(renderer, 255, 0, 255, 255);
+            SDL_Rect rect = { static_cast<int>(x - 5 - cameraX), static_cast<int>(y - 5 - cameraY), 10, 10 };
+            SDL_RenderFillRect(renderer, &rect);
+        } else {
+            // Regular bullets
+            SDL_SetRenderDrawColor(renderer, fromEnemy ? 0 : 255, 0, fromEnemy ? 255 : 0, 255);
+            SDL_Rect rect = { static_cast<int>(x - 3 - cameraX), static_cast<int>(y - 3 - cameraY), 6, 6 };
+            SDL_RenderFillRect(renderer, &rect);
+        }
     }
 };
 
@@ -467,9 +524,10 @@ public:
     Uint32 startTime;
     bool active;
     SDL_Texture* texture;
+    bool isSpecial;
 
-    Explosion(float x_, float y_)
-        : x(x_), y(y_), startTime(SDL_GetTicks()), active(true) {
+    Explosion(float x_, float y_, bool special = false)
+        : x(x_), y(y_), startTime(SDL_GetTicks()), active(true), isSpecial(special) {
         texture = ResourceManager::getTexture("explosion.png");
     }
 
@@ -484,7 +542,8 @@ public:
 
         // Use texture for explosion instead of pixel-by-pixel rendering
         if (texture) {
-            int size = static_cast<int>(EXPLOSION_RADIUS * 2 * (1.0f - progress * 0.5f));
+            // Special explosions are larger
+            int size = static_cast<int>(EXPLOSION_RADIUS * 2 * (1.0f - progress * 0.5f) * (isSpecial ? 2.0f : 1.0f));
             SDL_Rect destRect = {
                 static_cast<int>(x - size / 2 - cameraX),
                 static_cast<int>(y - size / 2 - cameraY),
@@ -494,13 +553,22 @@ public:
 
             // Set alpha based on progress
             SDL_SetTextureAlphaMod(texture, static_cast<Uint8>(255 * (1.0f - progress)));
+
+            // Special explosions have a purple tint
+            if (isSpecial) {
+                SDL_SetTextureColorMod(texture, 255, 100, 255);
+            } else {
+                SDL_SetTextureColorMod(texture, 255, 255, 255);
+            }
+
             SDL_RenderCopy(renderer, texture, nullptr, &destRect);
         } else {
             // Fallback to original rendering if texture not available
             int red = 255;
             int green = static_cast<int>(255 * progress);
-            SDL_SetRenderDrawColor(renderer, red, green, 0, 255);
-            int radius = static_cast<int>(EXPLOSION_RADIUS * (1.0f - progress));
+            int blue = isSpecial ? 255 : 0;
+            SDL_SetRenderDrawColor(renderer, red, green, blue, 255);
+            int radius = static_cast<int>(EXPLOSION_RADIUS * (1.0f - progress) * (isSpecial ? 2.0f : 1.0f));
             int centerX = static_cast<int>(x - cameraX);
             int centerY = static_cast<int>(y - cameraY);
 
@@ -530,7 +598,12 @@ public:
 
     PowerUp(float x_, float y_, PowerUpType type_)
         : x(x_), y(y_), active(true), type(type_), spawnTime(SDL_GetTicks()) {
-        texture = ResourceManager::getTexture("powerup.png");
+
+        if (type_ == PowerUpType::HEALTH_PICKUP) {
+            texture = ResourceManager::getTexture("health_pickup.png");
+        } else {
+            texture = ResourceManager::getTexture("powerup.png");
+        }
     }
 
     void render(SDL_Renderer* renderer, float cameraX, float cameraY) {
@@ -549,13 +622,24 @@ public:
         };
 
         // Different colors for different power-up types
-        SDL_SetRenderDrawColor(renderer,
-            type == PowerUpType::HEALTH ? 255 : 0,
-            type == PowerUpType::SPEED ? 255 : 0,
-            type == PowerUpType::DAMAGE ? 255 : 0,
-            255);
+        if (type == PowerUpType::HEALTH_PICKUP) {
+            SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255); // Red for health pickup
+        } else {
+            SDL_SetRenderDrawColor(renderer,
+                type == PowerUpType::HEALTH ? 255 : 0,
+                type == PowerUpType::SPEED ? 255 : 0,
+                type == PowerUpType::DAMAGE ? 255 : 0,
+                255);
+        }
 
         if (texture) {
+            // Set color mod for health pickup
+            if (type == PowerUpType::HEALTH_PICKUP) {
+                SDL_SetTextureColorMod(texture, 255, 100, 100);
+            } else {
+                SDL_SetTextureColorMod(texture, 255, 255, 255);
+            }
+
             SDL_RenderCopy(renderer, texture, nullptr, &destRect);
         } else {
             // Fallback if texture not available
@@ -576,7 +660,7 @@ private:
         bool active;
     };
 
-    std::vector<Particle> particles;
+    vector<Particle> particles;
 
 public:
     ParticleSystem(int maxParticles = 1000) {
@@ -587,9 +671,9 @@ public:
     }
 
     void emit(float x, float y, float angle, int count, SDL_Color color, int life = 30) {
-        std::uniform_real_distribution<float> angleDist(-0.5f, 0.5f);
-        std::uniform_real_distribution<float> speedDist(0.5f, 2.0f);
-        std::uniform_int_distribution<int> lifeDist(life / 2, life);
+        uniform_real_distribution<float> angleDist(-0.5f, 0.5f);
+        uniform_real_distribution<float> speedDist(0.5f, 2.0f);
+        uniform_int_distribution<int> lifeDist(life / 2, life);
 
         for (int i = 0; i < count; ++i) {
             // Find inactive particle
@@ -613,10 +697,10 @@ public:
 
     // New method to emit particles in a circle (for shield effect)
     void emitCircle(float x, float y, float radius, int count, SDL_Color color, int life = 30) {
-        std::uniform_real_distribution<float> angleDist(0, 2 * M_PI);
-        std::uniform_real_distribution<float> radiusDist(0.8f * radius, 1.2f * radius);
-        std::uniform_real_distribution<float> speedDist(0.2f, 0.8f);
-        std::uniform_int_distribution<int> lifeDist(life / 2, life);
+        uniform_real_distribution<float> angleDist(0, 2 * M_PI);
+        uniform_real_distribution<float> radiusDist(0.8f * radius, 1.2f * radius);
+        uniform_real_distribution<float> speedDist(0.2f, 0.8f);
+        uniform_int_distribution<int> lifeDist(life / 2, life);
 
         for (int i = 0; i < count; ++i) {
             // Find inactive particle
@@ -678,6 +762,57 @@ public:
     }
 };
 
+// Kill Notification class
+class KillNotification {
+public:
+    string text;
+    Uint32 startTime;
+    bool active;
+
+    KillNotification(const string& text_)
+        : text(text_), startTime(SDL_GetTicks()), active(true) {}
+
+    bool update() {
+        if (!active) return false;
+
+        Uint32 currentTime = SDL_GetTicks();
+        if (currentTime - startTime >= KILL_NOTIFICATION_DURATION) {
+            active = false;
+            return false;
+        }
+        return true;
+    }
+
+    void render(SDL_Renderer* renderer, TTF_Font* font) {
+        if (!active) return;
+
+        Uint32 currentTime = SDL_GetTicks();
+        float progress = (currentTime - startTime) / static_cast<float>(KILL_NOTIFICATION_DURATION);
+
+        // Fade out near the end
+        Uint8 alpha = progress > 0.7f ? static_cast<Uint8>(255 * (1.0f - (progress - 0.7f) / 0.3f)) : 255;
+
+        SDL_Color textColor = {255, 0, 0, alpha};
+        SDL_Surface* textSurface = TTF_RenderText_Solid(font, text.c_str(), textColor);
+        if (!textSurface) return;
+
+        SDL_Texture* textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
+        SDL_SetTextureAlphaMod(textTexture, alpha);
+
+        SDL_Rect textRect = {
+            WINDOW_WIDTH / 2 - textSurface->w / 2,
+            50,
+            textSurface->w,
+            textSurface->h
+        };
+
+        SDL_RenderCopy(renderer, textTexture, nullptr, &textRect);
+
+        SDL_FreeSurface(textSurface);
+        SDL_DestroyTexture(textTexture);
+    }
+};
+
 // Game Class
 class Game {
 private:
@@ -691,16 +826,22 @@ private:
     Mix_Chunk* powerupSound;
     Mix_Chunk* shieldActivateSound;   // New sound for shield activation
     Mix_Chunk* shieldDeactivateSound; // New sound for shield deactivation
+    Mix_Chunk* healSound;             // New sound for healing
     SDL_Texture* playerTexture;
     SDL_Texture* playerShieldTexture; // New texture for shield animation
     SDL_Texture* enemyTexture;
     Tank player;
-    std::vector<Tank> enemies;
-    std::vector<Bullet> bullets;
-    std::vector<Explosion> explosions;
-    std::vector<PowerUp> powerups;
+    vector<Tank> enemies;
+    vector<Bullet> bullets;
+    vector<Explosion> explosions;
+    vector<PowerUp> powerups;
+    vector<KillNotification> killNotifications;
     ParticleSystem particles;
     float cameraX, cameraY;
+    bool rightMouseHeld;
+    float normalCameraZoom;
+    float currentCameraZoom;
+
     struct {
         int bulletsFired;
         int tanksDestroyed;
@@ -722,6 +863,7 @@ private:
     } screenShake;
     Uint32 lastSpawnTime;
     Uint32 lastPowerUpTime;
+    Uint32 lastHealthPickupTime;
     Uint32 shieldStartTime;
     Uint32 lastShieldTime;
     int shieldCooldownRemaining;
@@ -729,6 +871,115 @@ private:
     bool paused;
     int difficulty;
     float gameTime;
+    int circleX, circleY;
+
+    void handleSpecialAbility(float deltaTime) {
+        if (!player.alive || state != GameState::PLAYING) return;
+
+        // Check for cancel with 'A' key
+        const Uint8* keyState = SDL_GetKeyboardState(NULL);
+        if (player.isSpecialActive && keyState[SDL_SCANCODE_A]) {
+            // Cancel special ability
+            player.isSpecialActive = false;
+            player.specialActivationTimer = 0;
+            currentCameraZoom = normalCameraZoom;
+            return;
+        }
+
+        if (rightMouseHeld && player.specialBullets > 0) {
+            // Immediately activate special mode when right mouse is pressed
+            if (!player.isSpecialActive) {
+                player.isSpecialActive = true;
+            }
+
+            player.specialActivationTimer += deltaTime;
+
+            // Limit the maximum activation time to 3 seconds
+            player.specialActivationTimer = min(player.specialActivationTimer, 3.0f);
+
+            // Gradually zoom out camera based on activation time
+            float zoomProgress = player.specialActivationTimer / 3.0f;
+            currentCameraZoom = normalCameraZoom + (SPECIAL_ZOOM_FACTOR - normalCameraZoom) * zoomProgress;
+
+        } else if (player.isSpecialActive) {
+            // Right mouse was released after being in special mode
+
+            // Only fire if held for at least 0.5 seconds
+            if (player.specialActivationTimer >= 0.5f) {
+                // Get bullet spawn position (same as regular bullets)
+                float bulletX, bulletY;
+                player.getBulletSpawnPosition(bulletX, bulletY);
+
+                // Fire special bullet
+                Bullet bullet(bulletX, bulletY,
+                            BULLET_SPEED * 1.5f * cos(player.angle),
+                            BULLET_SPEED * 1.5f * sin(player.angle),
+                            false,
+                            1000, // Very high damage to one-shot enemies
+                            true); // Mark as special bullet
+
+                bullets.push_back(bullet);
+                player.specialBullets--;
+
+                // Play special sound
+                if (shootSound) {
+                    Mix_PlayChannel(-1, shootSound, 0);
+                }
+
+                // Add special muzzle flash particles
+                SDL_Color specialColor = {255, 0, 255, 255}; // Purple for special
+                particles.emit(
+                    bulletX,
+                    bulletY,
+                    player.angle,
+                    30, // More particles
+                    specialColor
+                );
+
+                // Screen shake for special shot
+                activateScreenShake(5.0f, 300);
+            }
+
+            // Reset special mode
+            player.specialActivationTimer = 0;
+            player.isSpecialActive = false;
+            currentCameraZoom = normalCameraZoom;
+        }
+    }
+
+    void renderSpecialTargetingLine() {
+        if (!player.isSpecialActive) return;
+
+        // Calculate line length based on activation time (max at 3 seconds)
+        float lineProgress = min(player.specialActivationTimer / 3.0f, 1.0f);
+        int lineLength = static_cast<int>(SPECIAL_LINE_LENGTH * lineProgress);
+
+        // Get bullet spawn position (same as regular bullets)
+        float bulletX, bulletY;
+        player.getBulletSpawnPosition(bulletX, bulletY);
+
+        // Convert to screen coordinates
+        int startX = static_cast<int>(bulletX - cameraX);
+        int startY = static_cast<int>(bulletY - cameraY);
+
+        // Calculate end point - vertical bisector along tank's length
+        int endX = startX + static_cast<int>(cos(player.angle) * lineLength);
+        int endY = startY + static_cast<int>(sin(player.angle) * lineLength);
+
+        // Draw line
+        SDL_SetRenderDrawColor(renderer, 255, 0, 255, 255); // Purple for special
+        SDL_RenderDrawLine(renderer, startX, startY, endX, endY);
+
+        // Draw small circles along the line for better visibility
+        int numCircles = static_cast<int>(lineLength / 50);
+        for (int i = 0; i < numCircles; i++) {
+            int circleX = startX + static_cast<int>(cos(player.angle) * i * 50);
+            int circleY = startY + static_cast<int>(sin(player.angle) * i * 50);
+
+            SDL_Rect circleRect = {circleX - 2, circleY - 2, 4, 4};
+            SDL_RenderFillRect(renderer, &circleRect);
+        }
+    }
 
 public:
     Game(SDL_Renderer* rend, TTF_Font* f)
@@ -738,10 +989,14 @@ public:
           cameraX(0), cameraY(0),
           lastSpawnTime(0),
           lastPowerUpTime(0),
+          lastHealthPickupTime(0),
           shieldStartTime(0),
           lastShieldTime(0),
           shieldCooldownRemaining(0),
           mouseHeld(false),
+          rightMouseHeld(false),
+          normalCameraZoom(1.0f),
+          currentCameraZoom(1.0f),
           paused(false),
           difficulty(1),
           gameTime(0.0f) {
@@ -761,6 +1016,7 @@ public:
         powerupSound = ResourceManager::getSound("powerup.mp3");
         shieldActivateSound = ResourceManager::getSound("shield_activate.mp3");
         shieldDeactivateSound = ResourceManager::getSound("shield_deactivate.mp3");
+        healSound = ResourceManager::getSound("heal.mp3");
         backgroundMusic = ResourceManager::getMusic("background_music.mp3");
 
         // Create a recolored version of the tank texture for shield effect
@@ -774,6 +1030,7 @@ public:
 
         player.texture = playerTexture;
         player.shieldTexture = playerShieldTexture;
+        player.isPlayer = true;  // Set player flag
 
         // Start background music
         if (backgroundMusic) {
@@ -822,6 +1079,7 @@ public:
         player.update(deltaTime);
         handleWallBounce(player);
         handleRapidFire(deltaTime);
+        handleSpecialAbility(deltaTime);
 
         // Update difficulty based on time
         updateDifficulty();
@@ -838,6 +1096,12 @@ public:
         if (currentTime - lastPowerUpTime >= 15000 && powerups.size() < 3) {
             spawnPowerUp();
             lastPowerUpTime = currentTime;
+        }
+
+        // Spawn health pickups
+        if (currentTime - lastHealthPickupTime >= HEALTH_PICKUP_SPAWN_INTERVAL) {
+            spawnHealthPickup();
+            lastHealthPickupTime = currentTime;
         }
 
         // Update enemies
@@ -858,6 +1122,16 @@ public:
         // Update particles
         particles.update();
 
+        // Update kill notifications
+        for (auto& notification : killNotifications) {
+            notification.update();
+        }
+        killNotifications.erase(
+            remove_if(killNotifications.begin(), killNotifications.end(),
+                [](const KillNotification& n) { return !n.active; }),
+            killNotifications.end()
+        );
+
         // Handle collisions
         handleCollisions();
 
@@ -869,7 +1143,7 @@ public:
 
         // Update shield cooldown
         if (shieldCooldownRemaining > 0) {
-            shieldCooldownRemaining = std::max(0, static_cast<int>(SHIELD_COOLDOWN - (currentTime - lastShieldTime)));
+            shieldCooldownRemaining = max(0, static_cast<int>(SHIELD_COOLDOWN - (currentTime - lastShieldTime)));
         }
 
         // Check if shield has expired
@@ -968,24 +1242,32 @@ private:
     void handleGameEvents(SDL_Event& e) {
         if (e.type == SDL_MOUSEMOTION) {
             int mouseX, mouseY;
-             SDL_GetMouseState(&mouseX, &mouseY);
+            SDL_GetMouseState(&mouseX, &mouseY);
             if (mouseX >= 0 && mouseX < WINDOW_WIDTH && mouseY >= 0 && mouseY < WINDOW_HEIGHT) {
                 float worldX = mouseX + cameraX;
                 float worldY = mouseY + cameraY;
                 float dx = worldX - player.x;
                 float dy = worldY - player.y;
-            if (dx != 0 || dy != 0) {
-            player.angle = atan2(dy, dx);
+                if (dx != 0 || dy != 0) {
+                    player.angle = atan2(dy, dx);
                 }
             }
         }
-        else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
-            mouseHeld = true;
-            if (!rapidFire.active) {
-                shoot();
+        else if (e.type == SDL_MOUSEBUTTONDOWN) {
+            if (e.button.button == SDL_BUTTON_LEFT) {
+                mouseHeld = true;
+                if (!rapidFire.active) {
+                    shoot();
+                }
+            } else if (e.button.button == SDL_BUTTON_RIGHT && player.specialBullets > 0) {
+                rightMouseHeld = true;
             }
-        } else if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-            mouseHeld = false;
+        } else if (e.type == SDL_MOUSEBUTTONUP) {
+            if (e.button.button == SDL_BUTTON_LEFT) {
+                mouseHeld = false;
+            } else if (e.button.button == SDL_BUTTON_RIGHT) {
+                rightMouseHeld = false;
+            }
         } else if (e.type == SDL_KEYDOWN) {
             // Movement with WASD
             if (e.key.keysym.sym == SDLK_w) {
@@ -994,6 +1276,9 @@ private:
                 player.vy = player.speed * 2.0f;
             } else if (e.key.keysym.sym == SDLK_a) {
                 player.vx = -player.speed * 2.0f;
+
+                // If 'A' is pressed while special ability is active, it will be handled in handleSpecialAbility
+
             } else if (e.key.keysym.sym == SDLK_d) {
                 player.vx = player.speed * 2.0f;
             }
@@ -1009,6 +1294,10 @@ private:
                 rapidFire.lastActivationTime = rapidFire.startTime;
                 rapidFire.cooldownRemaining = RAPID_FIRE_COOLDOWN;
             }
+            // Use health pickup
+            else if (e.key.keysym.sym == SDLK_s && player.healthPickups > 0) {
+                useHealthPickup();
+            }
         } else if (e.type == SDL_KEYUP) {
             // Stop movement when keys are released
             if (e.key.keysym.sym == SDLK_w && player.vy < 0) {
@@ -1021,6 +1310,22 @@ private:
                 player.vx = 0;
             }
         }
+    }
+
+    void useHealthPickup() {
+        if (player.healthPickups <= 0 || player.hp >= player.maxHp) return;
+
+        player.hp = min(player.maxHp, player.hp + HEALTH_PICKUP_HEAL_AMOUNT);
+        player.healthPickups--;
+
+        // Play heal sound
+        if (healSound) {
+            Mix_PlayChannel(-1, healSound, 0);
+        }
+
+        // Add healing particles
+        SDL_Color healColor = {0, 255, 0, 255};
+        particles.emitCircle(player.x, player.y, 40, 30, healColor, 60);
     }
 
     void activateShield() {
@@ -1059,8 +1364,8 @@ private:
 
     void updateCamera() {
         // Target camera position (centered on player)
-        float targetCameraX = player.x - WINDOW_WIDTH / 2.0f;
-        float targetCameraY = player.y - WINDOW_HEIGHT / 2.0f;
+        float targetCameraX = player.x - (WINDOW_WIDTH / currentCameraZoom) / 2.0f;
+        float targetCameraY = player.y - (WINDOW_HEIGHT / currentCameraZoom) / 2.0f;
 
         // Apply screen shake if active
         if (screenShake.active) {
@@ -1068,20 +1373,20 @@ private:
             float progress = (currentTime - screenShake.startTime) / static_cast<float>(screenShake.duration);
             float intensity = screenShake.intensity * (1.0f - progress);
 
-            std::uniform_real_distribution<float> shakeDist(-1.0f, 1.0f);
+            uniform_real_distribution<float> shakeDist(-1.0f, 1.0f);
             targetCameraX += shakeDist(rng) * intensity;
             targetCameraY += shakeDist(rng) * intensity;
         }
 
         // Clamp camera to map bounds
-        cameraX = std::max(0.0f, std::min(targetCameraX, static_cast<float>(MAP_WIDTH - WINDOW_WIDTH)));
-        cameraY = std::max(0.0f, std::min(targetCameraY, static_cast<float>(MAP_HEIGHT - WINDOW_HEIGHT)));
+        cameraX = max(0.0f, min(targetCameraX, static_cast<float>(MAP_WIDTH - WINDOW_WIDTH / currentCameraZoom)));
+        cameraY = max(0.0f, min(targetCameraY, static_cast<float>(MAP_HEIGHT - WINDOW_HEIGHT / currentCameraZoom)));
     }
 
     void updateDifficulty() {
         // Increase difficulty based on game time
         difficulty = 1 + static_cast<int>(gameTime / 60.0f); // Increase every minute
-        difficulty = std::min(difficulty, 5); // Cap at level 5
+        difficulty = min(difficulty, 5); // Cap at level 5
 
         // Update level in stats if changed
         if (stats.level != difficulty) {
@@ -1098,28 +1403,28 @@ private:
         bool bounced = false;
 
         if (tank.x <= borderLeft + tank.collisionRadius) {
-            tank.vx = std::abs(tank.vx) * BOUNCE_FACTOR;
+            tank.vx = abs(tank.vx) * BOUNCE_FACTOR;
             tank.x = borderLeft + tank.collisionRadius;
             bounced = true;
         } else if (tank.x >= borderRight - tank.collisionRadius) {
-            tank.vx = -std::abs(tank.vx) * BOUNCE_FACTOR;
+            tank.vx = -abs(tank.vx) * BOUNCE_FACTOR;
             tank.x = borderRight - tank.collisionRadius;
             bounced = true;
         }
 
         if (tank.y <= borderTop + tank.collisionRadius) {
-            tank.vy = std::abs(tank.vy) * BOUNCE_FACTOR;
+            tank.vy = abs(tank.vy) * BOUNCE_FACTOR;
             tank.y = borderTop + tank.collisionRadius;
             bounced = true;
         } else if (tank.y >= borderBottom - tank.collisionRadius) {
-            tank.vy = -std::abs(tank.vy) * BOUNCE_FACTOR;
+            tank.vy = -abs(tank.vy) * BOUNCE_FACTOR;
             tank.y = borderBottom - tank.collisionRadius;
             bounced = true;
         }
 
         if (bounced) {
-            tank.x = std::max(borderLeft + tank.collisionRadius, std::min(tank.x, borderRight - tank.collisionRadius));
-            tank.y = std::max(borderTop + tank.collisionRadius, std::min(tank.y, borderBottom - tank.collisionRadius));
+            tank.x = max(borderLeft + tank.collisionRadius, min(tank.x, borderRight - tank.collisionRadius));
+            tank.y = max(borderTop + tank.collisionRadius, min(tank.y, borderBottom - tank.collisionRadius));
 
             // Add bounce particles
             SDL_Color color = {200, 200, 200, 255};
@@ -1133,8 +1438,10 @@ private:
     }
 
     void shoot() {
-        Bullet bullet(player.x + player.collisionRadius * cos(player.angle),
-                      player.y + player.collisionRadius * sin(player.angle),
+        float bulletX, bulletY;
+        player.getBulletSpawnPosition(bulletX, bulletY);
+
+        Bullet bullet(bulletX, bulletY,
                       BULLET_SPEED * cos(player.angle),
                       BULLET_SPEED * sin(player.angle),
                       false,
@@ -1155,8 +1462,8 @@ private:
         // Add muzzle flash particles
         SDL_Color color = {255, 200, 0, 255};
         particles.emit(
-            player.x + player.collisionRadius * cos(player.angle),
-            player.y + player.collisionRadius * sin(player.angle),
+            bulletX,
+            bulletY,
             player.angle,
             15,
             color
@@ -1164,14 +1471,32 @@ private:
 
         // Small screen shake when shooting
         activateScreenShake(1.0f, 50);
+
+        // Award special bullets
+        if (stats.bulletsFired % SPECIAL_BULLETS_REQUIRED == 0) {
+            if (player.specialBullets < MAX_SPECIAL_BULLETS) {
+                player.specialBullets++;
+
+                // Notification effect for earning special bullet
+                SDL_Color specialColor = {255, 0, 255, 255};
+                particles.emitCircle(player.x, player.y, 50, 30, specialColor, 60);
+
+                // Play special sound if available
+                if (powerupSound) {
+                    Mix_PlayChannel(-1, powerupSound, 0);
+                }
+            }
+        }
     }
 
     void handleRapidFire(float deltaTime) {
         Uint32 currentTime = SDL_GetTicks();
         if (rapidFire.active && currentTime - rapidFire.startTime < RAPID_FIRE_DURATION) {
             if (mouseHeld && currentTime - rapidFire.lastShotTime >= RAPID_FIRE_INTERVAL) {
-                Bullet bullet(player.x + player.collisionRadius * cos(player.angle),
-                              player.y + player.collisionRadius * sin(player.angle),
+                float bulletX, bulletY;
+                player.getBulletSpawnPosition(bulletX, bulletY);
+
+                Bullet bullet(bulletX, bulletY,
                               BULLET_SPEED * cos(player.angle),
                               BULLET_SPEED * sin(player.angle),
                               false,
@@ -1193,8 +1518,8 @@ private:
                 // Add muzzle flash particles
                 SDL_Color color = {255, 100, 0, 255};
                 particles.emit(
-                    player.x + player.collisionRadius * cos(player.angle),
-                    player.y + player.collisionRadius * sin(player.angle),
+                    bulletX,
+                    bulletY,
                     player.angle,
                     8,
                     color
@@ -1208,7 +1533,7 @@ private:
         }
 
         if (rapidFire.cooldownRemaining > 0) {
-            rapidFire.cooldownRemaining = std::max(0, static_cast<int>(RAPID_FIRE_COOLDOWN - (currentTime - rapidFire.lastActivationTime)));
+            rapidFire.cooldownRemaining = max(0, static_cast<int>(RAPID_FIRE_COOLDOWN - (currentTime - rapidFire.lastActivationTime)));
         }
     }
 
@@ -1217,7 +1542,7 @@ private:
         float viewRight = cameraX + WINDOW_WIDTH;
         float viewTop = cameraY;
         float viewBottom = cameraY + WINDOW_HEIGHT;
-        std::vector<int> validEdges;
+        vector<int> validEdges;
 
         if (viewTop > 0) validEdges.push_back(0);
         if (viewRight < MAP_WIDTH) validEdges.push_back(1);
@@ -1226,11 +1551,11 @@ private:
 
         if (validEdges.empty()) validEdges = {0, 1, 2, 3};
 
-        std::array<float, 4> distances = {
-            std::abs(player.y - BORDER_OFFSET),
-            std::abs(player.x - (MAP_WIDTH - BORDER_OFFSET)),
-            std::abs(player.y - (MAP_HEIGHT - BORDER_OFFSET)),
-            std::abs(player.x - BORDER_OFFSET)
+        array<float, 4> distances = {
+            abs(player.y - BORDER_OFFSET),
+            abs(player.x - (MAP_WIDTH - BORDER_OFFSET)),
+            abs(player.y - (MAP_HEIGHT - BORDER_OFFSET)),
+            abs(player.x - BORDER_OFFSET)
         };
 
         float maxDistance = -1.0f;
@@ -1251,7 +1576,7 @@ private:
         }
 
         // Randomly choose enemy type based on difficulty
-        std::uniform_int_distribution<int> typeDist(0, 99);
+        uniform_int_distribution<int> typeDist(0, 99);
         int roll = typeDist(rng);
         EnemyType enemyType;
 
@@ -1269,19 +1594,32 @@ private:
 
     void spawnPowerUp() {
         // Random position within the map bounds
-        std::uniform_int_distribution<int> xDist(BORDER_OFFSET + 50, MAP_WIDTH - BORDER_OFFSET - 50);
-        std::uniform_int_distribution<int> yDist(BORDER_OFFSET + 50, MAP_HEIGHT - BORDER_OFFSET - 50);
+        uniform_int_distribution<int> xDist(BORDER_OFFSET + 50, MAP_WIDTH - BORDER_OFFSET - 50);
+        uniform_int_distribution<int> yDist(BORDER_OFFSET + 50, MAP_HEIGHT - BORDER_OFFSET - 50);
         float x = static_cast<float>(xDist(rng));
         float y = static_cast<float>(yDist(rng));
 
         // Random power-up type
-        std::uniform_int_distribution<int> typeDist(0, 4);
+        uniform_int_distribution<int> typeDist(0, 4);
         PowerUpType type = static_cast<PowerUpType>(typeDist(rng));
 
         PowerUp powerup(x, y, type);
         powerups.push_back(powerup);
 
         lastPowerUpTime = SDL_GetTicks();
+    }
+
+    void spawnHealthPickup() {
+        // Random position within the map bounds
+        uniform_int_distribution<int> xDist(BORDER_OFFSET + 50, MAP_WIDTH - BORDER_OFFSET - 50);
+        uniform_int_distribution<int> yDist(BORDER_OFFSET + 50, MAP_HEIGHT - BORDER_OFFSET - 50);
+        float x = static_cast<float>(xDist(rng));
+        float y = static_cast<float>(yDist(rng));
+
+        PowerUp healthPickup(x, y, PowerUpType::HEALTH_PICKUP);
+        powerups.push_back(healthPickup);
+
+        lastHealthPickupTime = SDL_GetTicks();
     }
 
     void updateEnemyBehavior(Tank& enemy, float deltaTime) {
@@ -1293,7 +1631,7 @@ private:
         if (enemy.type == EnemyType::FAST) {
             float dx = player.x - enemy.x;
             float dy = player.y - enemy.y;
-            float distance = std::sqrt(dx * dx + dy * dy);
+            float distance = sqrt(dx * dx + dy * dy);
 
             if (distance > 300) {
                 // Smoother movement when approaching player
@@ -1325,7 +1663,7 @@ private:
         } else if (enemy.type == EnemyType::HEAVY) {
             float dx = player.x - enemy.x;
             float dy = player.y - enemy.y;
-            float distance = std::sqrt(dx * dx + dy * dy);
+            float distance = sqrt(dx * dx + dy * dy);
 
             if (distance > 0) {
                 dx /= distance;
@@ -1352,7 +1690,7 @@ private:
             // Basic tank
             float dx = player.x - enemy.x;
             float dy = player.y - enemy.y;
-            float distance = std::sqrt(dx * dx + dy * dy);
+            float distance = sqrt(dx * dx + dy * dy);
 
             if (distance > 0) {
                 dx /= distance;
@@ -1363,12 +1701,12 @@ private:
                 frameCount++;
 
                 if (frameCount % 30 == 0) { // Only change direction occasionally
-                    std::uniform_real_distribution<float> randDist(-0.1f, 0.1f);
+                    uniform_real_distribution<float> randDist(-0.1f, 0.1f);
                     dx += randDist(rng);
                     dy += randDist(rng);
 
                     // Normalize again
-                    float newDist = std::sqrt(dx * dx + dy * dy);
+                    float newDist = sqrt(dx * dx + dy * dy);
                     if (newDist > 0) {
                         dx /= newDist;
                         dy /= newDist;
@@ -1411,7 +1749,7 @@ private:
         if (currentTime - enemy.lastShotTime >= shootDelay) {
             float dx = player.x - enemy.x;
             float dy = player.y - enemy.y;
-            float length = std::sqrt(dx * dx + dy * dy);
+            float length = sqrt(dx * dx + dy * dy);
 
             if (length != 0) {
                 dx /= length;
@@ -1448,7 +1786,7 @@ private:
                 // Player bullets hitting enemies
                 for (auto& enemy : enemies) {
                     if (!enemy.alive) continue;
-                    if (std::sqrt(std::pow(bullet.x - enemy.x, 2) + std::pow(bullet.y - enemy.y, 2)) < enemy.collisionRadius) {
+                    if (sqrt(pow(bullet.x - enemy.x, 2) + pow(bullet.y - enemy.y, 2)) < enemy.collisionRadius) {
                         bullet.active = false;
                         enemy.hp -= bullet.damage;
 
@@ -1458,7 +1796,7 @@ private:
 
                         if (enemy.hp <= 0) {
                             enemy.alive = false;
-                            Explosion explosion(enemy.x, enemy.y);
+                            Explosion explosion(enemy.x, enemy.y, bullet.isSpecial);
                             explosions.push_back(explosion);
 
                             if (explosionSound) {
@@ -1466,16 +1804,31 @@ private:
                             }
 
                             // Screen shake on enemy destruction
-                            activateScreenShake(4.0f, 200);
+                            activateScreenShake(bullet.isSpecial ? 6.0f : 4.0f, bullet.isSpecial ? 300 : 200);
 
                             stats.tanksDestroyed++;
                             stats.score += enemy.type == EnemyType::BASIC ? 100 :
                                           (enemy.type == EnemyType::FAST ? 150 : 200);
 
+                            // Add kill notification
+                            killNotifications.push_back(KillNotification("KILL"));
+
+                            // Increase max health for every 5 enemies killed
+                            if (stats.tanksDestroyed % 5 == 0) {
+                                player.maxHp += 50;
+
+                                // Add notification for max health increase
+                                killNotifications.push_back(KillNotification("MAX HP +50"));
+
+                                // Visual effect for max HP increase
+                                SDL_Color hpColor = {0, 255, 0, 255};
+                                particles.emitCircle(player.x, player.y, 60, 40, hpColor, 80);
+                            }
+
                             // Chance to drop power-up
-                            std::uniform_int_distribution<int> dropDist(0, 100);
+                            uniform_int_distribution<int> dropDist(0, 100);
                             if (dropDist(rng) < 30) { // 30% chance
-                                std::uniform_int_distribution<int> typeDist(0, 4);
+                                uniform_int_distribution<int> typeDist(0, 4);
                                 PowerUpType type = static_cast<PowerUpType>(typeDist(rng));
                                 PowerUp powerup(enemy.x, enemy.y, type);
                                 powerups.push_back(powerup);
@@ -1486,7 +1839,7 @@ private:
                 }
             } else if (player.alive) {
                 // Enemy bullets hitting player
-                if (std::sqrt(std::pow(bullet.x - player.x, 2) + std::pow(bullet.y - player.y, 2)) < player.collisionRadius) {
+                if (sqrt(pow(bullet.x - player.x, 2) + pow(bullet.y - player.y, 2)) < player.collisionRadius) {
                     if (player.isShielding) {
                         // Shield deflects bullet
                         bullet.active = false;
@@ -1529,7 +1882,7 @@ private:
             if (player.alive && enemy.alive) {
                 float dx = enemy.x - player.x;
                 float dy = enemy.y - player.y;
-                float distance = std::sqrt(dx * dx + dy * dy);
+                float distance = sqrt(dx * dx + dy * dy);
                 float minDistance = player.collisionRadius + enemy.collisionRadius;
 
                 if (distance < minDistance) {
@@ -1554,7 +1907,7 @@ private:
                     if (overlap > 0) {
                         // Limit maximum push to avoid jitter
                         float maxPush = 2.0f;
-                        overlap = std::min(overlap, maxPush);
+                        overlap = min(overlap, maxPush);
 
                         player.x -= dx * overlap;
                         player.y -= dy * overlap;
@@ -1582,7 +1935,7 @@ private:
                 if (enemies[i].alive && enemies[j].alive) {
                     float dx = enemies[j].x - enemies[i].x;
                     float dy = enemies[j].y - enemies[i].y;
-                    float distance = std::sqrt(dx * dx + dy * dy);
+                    float distance = sqrt(dx * dx + dy * dy);
                     float minDistance = enemies[i].collisionRadius + enemies[j].collisionRadius;
 
                     if (distance < minDistance) {
@@ -1607,7 +1960,7 @@ private:
                         if (overlap > 0) {
                             // Limit maximum push to avoid jitter
                             float maxPush = 2.0f;
-                            overlap = std::min(overlap, maxPush);
+                            overlap = min(overlap, maxPush);
 
                             enemies[i].x -= dx * overlap;
                             enemies[i].y -= dy * overlap;
@@ -1622,17 +1975,34 @@ private:
         // Power-up collisions
         for (auto& powerup : powerups) {
             if (powerup.active && player.alive) {
-                if (std::sqrt(std::pow(powerup.x - player.x, 2) + std::pow(powerup.y - player.y, 2)) < player.collisionRadius + 15) {
-                    applyPowerUp(powerup);
-                    powerup.active = false;
+                if (sqrt(pow(powerup.x - player.x, 2) + pow(powerup.y - player.y, 2)) < player.collisionRadius + 15) {
+                    if (powerup.type == PowerUpType::HEALTH_PICKUP) {
+                        player.healthPickups++;
+                        powerup.active = false;
 
-                    if (powerupSound) {
-                        Mix_PlayChannel(-1, powerupSound, 0);
+                        // Play pickup sound
+                        if (powerupSound) {
+                            Mix_PlayChannel(-1, powerupSound, 0);
+                        }
+
+                        // Health pickup particles
+                        SDL_Color healthColor = {255, 0, 0, 255};
+                        particles.emit(powerup.x, powerup.y, 0, 20, healthColor, 40);
+
+                        // Add notification
+                        killNotifications.push_back(KillNotification("HEALTH PACK +1"));
+                    } else {
+                        applyPowerUp(powerup);
+                        powerup.active = false;
+
+                        if (powerupSound) {
+                            Mix_PlayChannel(-1, powerupSound, 0);
+                        }
+
+                        // Power-up particles
+                        SDL_Color powerupColor = {0, 255, 0, 255};
+                        particles.emit(powerup.x, powerup.y, 0, 30, powerupColor, 60);
                     }
-
-                    // Power-up particles
-                    SDL_Color powerupColor = {0, 255, 0, 255};
-                    particles.emit(powerup.x, powerup.y, 0, 30, powerupColor, 60);
                 }
             }
         }
@@ -1641,7 +2011,7 @@ private:
     void applyPowerUp(const PowerUp& powerup) {
         switch (powerup.type) {
             case PowerUpType::HEALTH:
-                player.hp = std::min(player.maxHp, player.hp + 30);
+                player.hp = min(player.maxHp, player.hp + 30);
                 break;
 
             case PowerUpType::SPEED:
@@ -1663,43 +2033,53 @@ private:
                 rapidFire.lastActivationTime = rapidFire.startTime;
                 rapidFire.cooldownRemaining = 0; // Reset cooldown
                 break;
+
+            default:
+                break;
         }
     }
 
     void cleanup() {
         // Remove inactive bullets
-        bullets.erase(std::remove_if(bullets.begin(), bullets.end(),
+        bullets.erase(remove_if(bullets.begin(), bullets.end(),
             [](const Bullet& b) { return !b.active; }), bullets.end());
 
         // Remove dead enemies
-        enemies.erase(std::remove_if(enemies.begin(), enemies.end(),
+        enemies.erase(remove_if(enemies.begin(), enemies.end(),
             [](const Tank& e) { return !e.alive; }), enemies.end());
 
         // Remove finished explosions
-        explosions.erase(std::remove_if(explosions.begin(), explosions.end(),
+        explosions.erase(remove_if(explosions.begin(), explosions.end(),
             [](const Explosion& e) { return !e.active; }), explosions.end());
 
         // Remove collected power-ups
-        powerups.erase(std::remove_if(powerups.begin(), powerups.end(),
+        powerups.erase(remove_if(powerups.begin(), powerups.end(),
             [](const PowerUp& p) { return !p.active; }), powerups.end());
     }
 
     void reset() {
         player = Tank(MAP_WIDTH / 2.0f, MAP_HEIGHT / 2.0f, playerTexture);
         player.shieldTexture = playerShieldTexture;
+        player.isPlayer = true;  // Set player flag
+        player.specialBullets = 0;
+        player.healthPickups = 0;
         enemies.clear();
         bullets.clear();
         explosions.clear();
         powerups.clear();
+        killNotifications.clear();
         stats = {0, 0, 0, 1};
         rapidFire = {false, 0, 0, 0, 0};
         screenShake = {false, 0.0f, 0, 0};
         lastSpawnTime = SDL_GetTicks();
         lastPowerUpTime = SDL_GetTicks();
+        lastHealthPickupTime = SDL_GetTicks();
         shieldStartTime = 0;
         shieldCooldownRemaining = 0;
         difficulty = 1;
         gameTime = 0.0f;
+        normalCameraZoom = 1.0f;
+        currentCameraZoom = 1.0f;
     }
 
     void renderGame() {
@@ -1724,9 +2104,13 @@ private:
         // Render particles
         particles.render(renderer, cameraX, cameraY);
 
+        // Render special targeting line if active
+        if (player.isSpecialActive) {
+            renderSpecialTargetingLine();
+        }
+
         // Render player
         player.render(renderer, cameraX, cameraY);
-        player.renderHealthBar(renderer, cameraX, cameraY);
 
         // Render enemies
         for (auto& enemy : enemies) {
@@ -1739,40 +2123,46 @@ private:
             explosion.render(renderer, cameraX, cameraY);
         }
 
+        // Render kill notifications
+        for (auto& notification : killNotifications) {
+            notification.render(renderer, font);
+        }
+
         // Render HUD
         renderStats();
         renderMinimap();
+
         // Render player HP bar at bottom center of screen
-if (player.alive) {
-    int barWidth = 200;
-    int barHeight = 20;
-    int barX = WINDOW_WIDTH / 2 - barWidth / 2;
-    int barY = WINDOW_HEIGHT - barHeight - 10;
-    
-    // Background of health bar
-    SDL_SetRenderDrawColor(renderer, 100, 0, 0, 255);
-    SDL_Rect bgRect = { barX, barY, barWidth, barHeight };
-    SDL_RenderFillRect(renderer, &bgRect);
-    
-    // Health bar fill
-    float hpRatio = static_cast<float>(player.hp) / player.maxHp;
-    SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
-    SDL_Rect hpRect = { barX, barY, static_cast<int>(barWidth * hpRatio), barHeight };
-    SDL_RenderFillRect(renderer, &hpRect);
-    
-    // HP text
-    std::string hpText = std::to_string(player.hp) + "/" + std::to_string(player.maxHp) + " HP";
-    SDL_Color textColor = {255, 255, 255, 255};
-    SDL_Surface* hpSurface = TTF_RenderText_Solid(font, hpText.c_str(), textColor);
-    if (hpSurface) {
-        SDL_Texture* hpTexture = SDL_CreateTextureFromSurface(renderer, hpSurface);
-        SDL_Rect textRect = { barX + barWidth + 10, barY + (barHeight - hpSurface->h) / 2, 
-                             hpSurface->w, hpSurface->h };
-        SDL_RenderCopy(renderer, hpTexture, nullptr, &textRect);
-        SDL_FreeSurface(hpSurface);
-        SDL_DestroyTexture(hpTexture);
-    }
-}
+        if (player.alive) {
+            int barWidth = 200;
+            int barHeight = 20;
+            int barX = WINDOW_WIDTH / 2 - barWidth / 2;
+            int barY = WINDOW_HEIGHT - barHeight - 10;
+
+            // Background of health bar
+            SDL_SetRenderDrawColor(renderer, 100, 0, 0, 255);
+            SDL_Rect bgRect = { barX, barY, barWidth, barHeight };
+            SDL_RenderFillRect(renderer, &bgRect);
+
+            // Health bar fill
+            float hpRatio = static_cast<float>(player.hp) / player.maxHp;
+            SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
+            SDL_Rect hpRect = { barX, barY, static_cast<int>(barWidth * hpRatio), barHeight };
+            SDL_RenderFillRect(renderer, &hpRect);
+
+            // HP text
+            string hpText = to_string(player.hp) + "/" + to_string(player.maxHp) + " HP";
+            SDL_Color textColor = {255, 255, 255, 255};
+            SDL_Surface* hpSurface = TTF_RenderText_Solid(font, hpText.c_str(), textColor);
+            if (hpSurface) {
+                SDL_Texture* hpTexture = SDL_CreateTextureFromSurface(renderer, hpSurface);
+                SDL_Rect textRect = { barX + barWidth + 10, barY + (barHeight - hpSurface->h) / 2,
+                                    hpSurface->w, hpSurface->h };
+                SDL_RenderCopy(renderer, hpTexture, nullptr, &textRect);
+                SDL_FreeSurface(hpSurface);
+                SDL_DestroyTexture(hpTexture);
+            }
+        }
 
         renderCooldowns();
     }
@@ -1783,17 +2173,17 @@ if (player.alive) {
             float percentage = 1.0f - (shieldCooldownRemaining / static_cast<float>(SHIELD_COOLDOWN));
             renderCooldownBar(10, 190, 200, 10, percentage, {0, 255, 255, 255});
 
-            std::string cooldownText = "Shield: " + std::to_string(shieldCooldownRemaining / 1000) + "s";
+            string cooldownText = "Shield: " + to_string(shieldCooldownRemaining / 1000) + "s";
             renderText(cooldownText, 10, 205, {255, 255, 255, 255});
         } else if (!player.isShielding) {
-            renderText("Ao giap da san sang (Bam E)", 10, 190, {0, 255, 255, 255});
+            renderText("Shield ready (Press E)", 10, 190, {0, 255, 255, 255});
         } else {
             // Shield active - show duration
             Uint32 currentTime = SDL_GetTicks();
             float percentage = 1.0f - ((currentTime - shieldStartTime) / static_cast<float>(SHIELD_DURATION));
             renderCooldownBar(10, 190, 200, 10, percentage, {0, 255, 255, 255});
 
-            std::string durationText = "Shield: " + std::to_string((SHIELD_DURATION - (currentTime - shieldStartTime)) / 1000) + "s";
+            string durationText = "Shield: " + to_string((SHIELD_DURATION - (currentTime - shieldStartTime)) / 1000) + "s";
             renderText(durationText, 10, 205, {255, 255, 255, 255});
         }
 
@@ -1802,18 +2192,24 @@ if (player.alive) {
             float percentage = 1.0f - (rapidFire.cooldownRemaining / static_cast<float>(RAPID_FIRE_COOLDOWN));
             renderCooldownBar(10, 230, 200, 10, percentage, {255, 100, 0, 255});
 
-            std::string cooldownText = "Rapid Fire: " + std::to_string(rapidFire.cooldownRemaining / 1000) + "s";
+            string cooldownText = "Rapid Fire: " + to_string(rapidFire.cooldownRemaining / 1000) + "s";
             renderText(cooldownText, 10, 245, {255, 255, 255, 255});
         } else if (!rapidFire.active) {
-            renderText("Sung lien thanh da san sang (Bam Q)", 10, 230, {255, 100, 0, 255});
+            renderText("Rapid Fire ready (Press Q)", 10, 230, {255, 100, 0, 255});
         } else {
             // Rapid fire active - show duration
             Uint32 currentTime = SDL_GetTicks();
             float percentage = 1.0f - ((currentTime - rapidFire.startTime) / static_cast<float>(RAPID_FIRE_DURATION));
             renderCooldownBar(10, 230, 200, 10, percentage, {255, 100, 0, 255});
 
-            std::string durationText = "Rapid Fire: " + std::to_string((RAPID_FIRE_DURATION - (currentTime - rapidFire.startTime)) / 1000) + "s";
+            string durationText = "Rapid Fire: " + to_string((RAPID_FIRE_DURATION - (currentTime - rapidFire.startTime)) / 1000) + "s";
             renderText(durationText, 10, 245, {255, 255, 255, 255});
+        }
+
+        // Health pickups
+        if (player.healthPickups > 0) {
+            string healthText = "Health Packs: " + to_string(player.healthPickups) + " (Press S to use)";
+            renderText(healthText, 10, 270, {255, 0, 0, 255});
         }
     }
 
@@ -1829,7 +2225,7 @@ if (player.alive) {
         SDL_RenderFillRect(renderer, &fillRect);
     }
 
-    void renderText(const std::string& text, int x, int y, SDL_Color color) {
+    void renderText(const string& text, int x, int y, SDL_Color color) {
         SDL_Surface* textSurface = TTF_RenderText_Solid(font, text.c_str(), color);
         if (!textSurface) return;
 
@@ -1874,7 +2270,9 @@ if (player.alive) {
         SDL_DestroyTexture(exitTexture);
 
         // Render instructions
-        SDL_Surface* instructionsSurface = TTF_RenderText_Solid(font, "WASD: Move, Mouse: Aim/Shoot, Q: Rapid Fire, E: Shield", textColor);
+        SDL_Surface* instructionsSurface = TTF_RenderText_Solid(font,
+            "WASD: Move, Mouse: Aim/Shoot, Q: Rapid Fire, E: Shield, S: Use Health Pack, Right-Click: Special Shot, A: Cancel Special",
+            textColor);
         if (instructionsSurface) {
             SDL_Texture* instructionsTexture = SDL_CreateTextureFromSurface(renderer, instructionsSurface);
             SDL_Rect instructionsRect = { WINDOW_WIDTH / 2 - instructionsSurface->w / 2,
@@ -1949,7 +2347,7 @@ if (player.alive) {
         SDL_DestroyTexture(gameOverTexture);
 
         // Display score
-        std::string scoreText = "Final Score: " + std::to_string(stats.score);
+        string scoreText = "Final Score: " + to_string(stats.score);
         SDL_Surface* scoreSurface = TTF_RenderText_Solid(font, scoreText.c_str(), textColor);
         if (scoreSurface) {
             SDL_Texture* scoreTexture = SDL_CreateTextureFromSurface(renderer, scoreSurface);
@@ -1981,7 +2379,7 @@ if (player.alive) {
         SDL_Color textColor = {255, 255, 255, 255};
 
         // Score
-        std::string scoreText = "Score: " + std::to_string(stats.score);
+        string scoreText = "Score: " + to_string(stats.score);
         SDL_Surface* scoreSurface = TTF_RenderText_Solid(font, scoreText.c_str(), textColor);
         if (scoreSurface) {
             SDL_Texture* scoreTexture = SDL_CreateTextureFromSurface(renderer, scoreSurface);
@@ -1992,7 +2390,7 @@ if (player.alive) {
         }
 
         // Level
-        std::string levelText = "Level: " + std::to_string(stats.level);
+        string levelText = "Level: " + to_string(stats.level);
         SDL_Surface* levelSurface = TTF_RenderText_Solid(font, levelText.c_str(), textColor);
         if (levelSurface) {
             SDL_Texture* levelTexture = SDL_CreateTextureFromSurface(renderer, levelSurface);
@@ -2003,7 +2401,7 @@ if (player.alive) {
         }
 
         // Bullets fired
-        std::string bulletsText = "Dan ban ra: " + std::to_string(stats.bulletsFired) + " vien";
+        string bulletsText = "Bullets fired: " + to_string(stats.bulletsFired);
         SDL_Surface* bulletsSurface = TTF_RenderText_Solid(font, bulletsText.c_str(), textColor);
         if (bulletsSurface) {
             SDL_Texture* bulletsTexture = SDL_CreateTextureFromSurface(renderer, bulletsSurface);
@@ -2014,7 +2412,7 @@ if (player.alive) {
         }
 
         // Tanks destroyed
-        std::string tanksText = "Da tieu diet: " + std::to_string(stats.tanksDestroyed) + " xe tank";
+        string tanksText = "Tanks destroyed: " + to_string(stats.tanksDestroyed);
         SDL_Surface* tanksSurface = TTF_RenderText_Solid(font, tanksText.c_str(), textColor);
         if (tanksSurface) {
             SDL_Texture* tanksTexture = SDL_CreateTextureFromSurface(renderer, tanksSurface);
@@ -2022,6 +2420,31 @@ if (player.alive) {
             SDL_RenderCopy(renderer, tanksTexture, nullptr, &tanksRect);
             SDL_FreeSurface(tanksSurface);
             SDL_DestroyTexture(tanksTexture);
+        }
+
+        // Special bullets count
+        SDL_Color specialColor = {255, 0, 255, 255};
+        string specialText = "Special bullets: " + to_string(player.specialBullets) + "/" + to_string(MAX_SPECIAL_BULLETS);
+        SDL_Surface* specialSurface = TTF_RenderText_Solid(font, specialText.c_str(), specialColor);
+        if (specialSurface) {
+            SDL_Texture* specialTexture = SDL_CreateTextureFromSurface(renderer, specialSurface);
+            SDL_Rect specialRect = {10, 130, specialSurface->w, specialSurface->h};
+            SDL_RenderCopy(renderer, specialTexture, nullptr, &specialRect);
+            SDL_FreeSurface(specialSurface);
+            SDL_DestroyTexture(specialTexture);
+        }
+
+        // Add special ability instructions if player has special bullets
+        if (player.specialBullets > 0) {
+            string instructionText = "Hold right-click to charge special shot (A to cancel)";
+            SDL_Surface* instructionSurface = TTF_RenderText_Solid(font, instructionText.c_str(), specialColor);
+            if (instructionSurface) {
+                SDL_Texture* instructionTexture = SDL_CreateTextureFromSurface(renderer, instructionSurface);
+                SDL_Rect instructionRect = {10, 160, instructionSurface->w, instructionSurface->h};
+                SDL_RenderCopy(renderer, instructionTexture, nullptr, &instructionRect);
+                SDL_FreeSurface(instructionSurface);
+                SDL_DestroyTexture(instructionTexture);
+            }
         }
     }
 
@@ -2094,24 +2517,24 @@ if (player.alive) {
 
 int main(int argc, char* argv[]) {
     // Initialize random number generator
-    std::srand(static_cast<unsigned>(std::time(nullptr)));
+    srand(static_cast<unsigned>(time(nullptr)));
 
     // Initialize SDL
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
-        std::cerr << "SDL could not initialize! SDL_Error: " << SDL_GetError() << std::endl;
+        cerr << "SDL could not initialize! SDL_Error: " << SDL_GetError() << endl;
         return 1;
     }
 
     // Initialize SDL_image
     if (!(IMG_Init(IMG_INIT_PNG) & IMG_INIT_PNG)) {
-        std::cerr << "SDL_image could not initialize! SDL_image Error: " << IMG_GetError() << std::endl;
+        cerr << "SDL_image could not initialize! SDL_image Error: " << IMG_GetError() << endl;
         SDL_Quit();
         return 1;
     }
 
     // Initialize SDL_mixer
     if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048) < 0) {
-        std::cerr << "SDL_mixer could not initialize! SDL_mixer Error: " << Mix_GetError() << std::endl;
+        cerr << "SDL_mixer could not initialize! SDL_mixer Error: " << Mix_GetError() << endl;
         IMG_Quit();
         SDL_Quit();
         return 1;
@@ -2119,7 +2542,7 @@ int main(int argc, char* argv[]) {
 
     // Initialize SDL_ttf
     if (TTF_Init() < 0) {
-        std::cerr << "SDL_ttf could not initialize! TTF_Error: " << TTF_GetError() << std::endl;
+        cerr << "SDL_ttf could not initialize! TTF_Error: " << TTF_GetError() << endl;
         Mix_Quit();
         IMG_Quit();
         SDL_Quit();
@@ -2130,7 +2553,7 @@ int main(int argc, char* argv[]) {
     SDL_Window* window = SDL_CreateWindow("Tank Game", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
                                          WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_SHOWN);
     if (!window) {
-        std::cerr << "Window could not be created! SDL_Error: " << SDL_GetError() << std::endl;
+        cerr << "Window could not be created! SDL_Error: " << SDL_GetError() << endl;
         TTF_Quit();
         Mix_Quit();
         IMG_Quit();
@@ -2141,7 +2564,7 @@ int main(int argc, char* argv[]) {
     // Create renderer
     SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     if (!renderer) {
-        std::cerr << "Renderer could not be created! SDL_Error: " << SDL_GetError() << std::endl;
+        cerr << "Renderer could not be created! SDL_Error: " << SDL_GetError() << endl;
         SDL_DestroyWindow(window);
         TTF_Quit();
         Mix_Quit();
@@ -2153,7 +2576,7 @@ int main(int argc, char* argv[]) {
     // Load font
     TTF_Font* font = TTF_OpenFont("VCR_OSD_MONO_1.001.ttf", 24);
     if (!font) {
-        std::cerr << "Failed to load font! TTF_Error: " << TTF_GetError() << std::endl;
+        cerr << "Failed to load font! TTF_Error: " << TTF_GetError() << endl;
         SDL_DestroyRenderer(renderer);
         SDL_DestroyWindow(window);
         TTF_Quit();

@@ -1,6 +1,6 @@
 # DROP BUM BUM
 
-![Logo](https://i.imgur.com/xoLIhqy.png)
+![Logo](https://imgur.com/a/kuAsMuy)
 
 # 1. Thông tin tác giả
 - Họ và tên: Phạm Đình Tú
