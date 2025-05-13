@@ -1,4 +1,4 @@
-# DROP BUM BUM
+# BÙM BUM BLASTERS
 
 ![Logo](https://imgur.com/a/kuAsMuy)
 
@@ -7,5 +7,5 @@
 - MSSV: 24021653
 
 # 2. Tổng quam
-- Mô tả nội dung: Người chơi điều khiển một UFO vượt qua các chướng ngại vật để dành được số điểm cao nhất.
+- Mô tả nội dung: Người chơi điều khiển một xe tăng tiêu diệt các xe tăng khác để dành được số điểm cao nhất.
  
