@@ -96,6 +96,24 @@ enum class PowerUpType { HEALTH, SPEED, DAMAGE, SHIELD, RAPID_FIRE, HEALTH_PICKU
 // Random number generator
 mt19937 rng(chrono::steady_clock::now().time_since_epoch().count());
 
+// Menu button types
+enum class MenuButton {
+    START,
+    STATS,
+    TUTORIAL,
+    SETTINGS,
+    EXIT
+};
+
+// Menu button structure
+struct MenuButtonInfo {
+    SDL_Rect rect;
+    SDL_Texture* texture;
+    SDL_Texture* hoverTexture;
+    bool isHovered;
+    MenuButton type;
+};
+
 // Resource Manager
 class ResourceManager {
 private:
@@ -106,27 +124,27 @@ private:
 public:
     static void init(SDL_Renderer* renderer) {
         // Pre-load common textures
-        loadTexture("tank_shoot_spritesheet.png", renderer);
-        loadTexture("enemy_tank.png", renderer);
-        loadTexture("explosion.png", renderer);
-        loadTexture("powerup.png", renderer);
-        loadTexture("health_pickup.png", renderer);
+        loadTexture("assets/images/tank/player/tank_shoot_spritesheet.png", renderer);
+        loadTexture("assets/images/tank/npc/enemy_tank.png", renderer);
+        loadTexture("assets/images/effect/explosion.png", renderer);
+        loadTexture("assets/images/item/powerup.png", renderer);
+        loadTexture("assets/images/item/health_pickup.png", renderer);
 
         // Load shield texture (recolored tank spritesheet)
         // Note: You need to create this texture with different colors
-        loadTexture("tank_shield_spritesheet.png", renderer);
+        loadTexture("assets/images/tank/player/tank_shield_spritesheet.png", renderer);
 
         // Pre-load sounds
-        loadSound("shoot.mp3");
-        loadSound("rapid_fire.mp3");
-        loadSound("explosion.mp3");
-        loadSound("powerup.mp3");
-        loadSound("shield_activate.mp3");  // New sound for shield activation
-        loadSound("shield_deactivate.mp3"); // New sound for shield deactivation
-        loadSound("heal.mp3"); // New sound for healing
+        loadSound("assets/sounds/shoot.mp3");
+        loadSound("assets/sounds/rapid_fire.mp3");
+        loadSound("assets/sounds/explosion.mp3");
+        loadSound("assets/sounds/powerup.mp3");
+        loadSound("assets/sounds/shield_activate.mp3");  // New sound for shield activation
+        loadSound("assets/sounds/shield_deactivate.mp3"); // New sound for shield deactivation
+        loadSound("assets/sounds/heal.mp3"); // New sound for healing
 
         // Pre-load music
-        loadMusic("background_music.mp3");
+        loadMusic("assets/sounds/background_music.mp3");
     }
 
     static void cleanup() {
@@ -553,7 +571,7 @@ public:
 
     Explosion(float x_, float y_, bool special = false)
         : x(x_), y(y_), startTime(SDL_GetTicks()), active(true), isSpecial(special) {
-        texture = ResourceManager::getTexture("explosion.png");
+        texture = ResourceManager::getTexture("assets/images/effect/explosion.png");
     }
 
     void render(SDL_Renderer* renderer, float cameraX, float cameraY) {
@@ -625,9 +643,9 @@ public:
         : x(x_), y(y_), active(true), type(type_), spawnTime(SDL_GetTicks()) {
 
         if (type_ == PowerUpType::HEALTH_PICKUP) {
-            texture = ResourceManager::getTexture("health_pickup.png");
+            texture = ResourceManager::getTexture("assets/images/item/health_pickup.png");
         } else {
-            texture = ResourceManager::getTexture("powerup.png");
+            texture = ResourceManager::getTexture("assets/images/item/powerup.png");
         }
     }
 
@@ -666,7 +684,9 @@ public:
             }
 
             SDL_RenderCopy(renderer, texture, nullptr, &destRect);
-        } else {
+        }
+
+        else {
             // Fallback if texture not available
             SDL_RenderFillRect(renderer, &destRect);
         }
@@ -852,6 +872,7 @@ private:
     Mix_Chunk* shieldActivateSound;   // New sound for shield activation
     Mix_Chunk* shieldDeactivateSound; // New sound for shield deactivation
     Mix_Chunk* healSound;             // New sound for healing
+    Mix_Chunk* buttonHoverSound;      // New: Sound for button hover
     SDL_Texture* playerTexture;
     SDL_Texture* playerShieldTexture; // New texture for shield animation
     SDL_Texture* enemyTexture;
@@ -905,6 +926,19 @@ private:
     int difficulty;
     float gameTime;
     int circleX, circleY;
+
+    // Menu properties
+    SDL_Texture* menuBackgroundTexture;
+    vector<MenuButtonInfo> menuButtons;
+    MenuButton currentHoveredButton;
+
+    // Add new struct for button animation
+    struct ButtonAnimation {
+        float scale;
+        float targetScale;
+        Uint32 lastUpdateTime;
+    };
+    unordered_map<MenuButton, ButtonAnimation> buttonAnimations;
 
     void handleSpecialAbility(float deltaTime) {
         if (!player.alive || state != GameState::PLAYING) return;
@@ -1018,6 +1052,7 @@ public:
     Game(SDL_Renderer* rend, TTF_Font* f)
         : renderer(rend), font(f),
           state(GameState::MENU),
+          menuBackgroundTexture(nullptr),
           player(MAP_WIDTH / 2.0f, MAP_HEIGHT / 2.0f, nullptr),
           cameraX(0), cameraY(0),
           lastSpawnTime(0),
@@ -1042,22 +1077,23 @@ public:
         // Initialize resources
         ResourceManager::init(renderer);
 
-        playerTexture = ResourceManager::getTexture("tank_shoot_spritesheet.png");
-        enemyTexture = ResourceManager::getTexture("enemy_tank.png");
-        shootSound = ResourceManager::getSound("shoot.mp3");
-        rapidFireSound = ResourceManager::getSound("rapid_fire.mp3");
-        explosionSound = ResourceManager::getSound("explosion.mp3");
-        powerupSound = ResourceManager::getSound("powerup.mp3");
-        shieldActivateSound = ResourceManager::getSound("shield_activate.mp3");
-        shieldDeactivateSound = ResourceManager::getSound("shield_deactivate.mp3");
-        healSound = ResourceManager::getSound("heal.mp3");
-        backgroundMusic = ResourceManager::getMusic("background_music.mp3");
+        playerTexture = ResourceManager::getTexture("assets/images/tank/player/tank_shoot_spritesheet.png");
+        enemyTexture = ResourceManager::getTexture("assets/images/tank/npc/enemy_tank.png");
+        shootSound = ResourceManager::getSound("assets/sounds/shoot.mp3");
+        rapidFireSound = ResourceManager::getSound("assets/sounds/rapid_fire.mp3");
+        explosionSound = ResourceManager::getSound("assets/sounds/explosion.mp3");
+        powerupSound = ResourceManager::getSound("assets/sounds/powerup.mp3");
+        shieldActivateSound = ResourceManager::getSound("assets/sounds/shield_activate.mp3");
+        shieldDeactivateSound = ResourceManager::getSound("assets/sounds/shield_deactivate.mp3");
+        healSound = ResourceManager::getSound("assets/sounds/heal.mp3");
+        backgroundMusic = ResourceManager::getMusic("assets/sounds/background_music.mp3");
+        buttonHoverSound = ResourceManager::getSound("assets/sounds/button_hover.mp3");
 
         // Create a recolored version of the tank texture for shield effect
         // This creates a green-tinted version of the tank
         playerShieldTexture = ResourceManager::createRecoloredTexture(
-            "tank_shoot_spritesheet.png",
-            "tank_shield_spritesheet.png",
+            "assets/images/tank/player/tank_shoot_spritesheet.png",
+            "assets/images/tank/player/tank_shield_spritesheet.png",
             renderer,
             100, 255, 100  // Green tint
         );
@@ -1070,9 +1106,25 @@ public:
         if (backgroundMusic) {
             Mix_PlayMusic(backgroundMusic, -1);
         }
+
+        initializeMenu();
     }
 
     ~Game() {
+        // Cleanup menu resources
+        if (menuBackgroundTexture) {
+            SDL_DestroyTexture(menuBackgroundTexture);
+        }
+        for (auto& button : menuButtons) {
+            if (button.texture) {
+                SDL_DestroyTexture(button.texture);
+            }
+            if (button.hoverTexture) {
+                SDL_DestroyTexture(button.hoverTexture);
+            }
+        }
+        menuButtons.clear();
+
         // Resources are cleaned up by ResourceManager
         ResourceManager::cleanup();
     }
@@ -1231,24 +1283,64 @@ public:
 
 private:
     void handleMenuEvents(SDL_Event& e, bool& quit) {
-        if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
-            int mouseX, mouseY;
-            SDL_GetMouseState(&mouseX, &mouseY);
+        if (e.type == SDL_MOUSEMOTION) {
+            int mouseX = e.motion.x;
+            int mouseY = e.motion.y;
 
-            // New Game button
-            if (mouseX >= WINDOW_WIDTH / 2 - BUTTON_WIDTH / 2 &&
-                mouseX <= WINDOW_WIDTH / 2 + BUTTON_WIDTH / 2 &&
-                mouseY >= WINDOW_HEIGHT / 2 - BUTTON_HEIGHT &&
-                mouseY <= WINDOW_HEIGHT / 2) {
-                state = GameState::PLAYING;
-                reset();
+            // Check hover state for each button
+            for (auto& button : menuButtons) {
+                bool wasHovered = button.isHovered;
+                button.isHovered = (mouseX >= button.rect.x &&
+                                  mouseX <= button.rect.x + button.rect.w &&
+                                  mouseY >= button.rect.y &&
+                                  mouseY <= button.rect.y + button.rect.h);
+
+                // If button just started being hovered
+                if (!wasHovered && button.isHovered) {
+                    // Play hover sound
+                    if (buttonHoverSound) {
+                        Mix_PlayChannel(-1, buttonHoverSound, 0);
+                    }
+                    // Set target scale for grow animation
+                    buttonAnimations[button.type].targetScale = 1.2f;
+                }
+                // If button just stopped being hovered
+                else if (wasHovered && !button.isHovered) {
+                    // Set target scale for shrink animation
+                    buttonAnimations[button.type].targetScale = 1.0f;
+                }
             }
-            // Exit button
-            else if (mouseX >= WINDOW_WIDTH / 2 - BUTTON_WIDTH / 2 &&
-                     mouseX <= WINDOW_WIDTH / 2 + BUTTON_WIDTH / 2 &&
-                     mouseY >= WINDOW_HEIGHT / 2 + BUTTON_SPACING &&
-                     mouseY <= WINDOW_HEIGHT / 2 + BUTTON_HEIGHT + BUTTON_SPACING) {
-                quit = true;
+        }
+        else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+            int mouseX = e.button.x;
+            int mouseY = e.button.y;
+
+            for (const auto& button : menuButtons) {
+                if (mouseX >= button.rect.x &&
+                    mouseX <= button.rect.x + button.rect.w &&
+                    mouseY >= button.rect.y &&
+                    mouseY <= button.rect.y + button.rect.h) {
+
+                    switch (button.type) {
+                        case MenuButton::START:
+                            state = GameState::PLAYING;
+                            reset();
+                            break;
+                        case MenuButton::STATS:
+                            // TODO: Implement stats screen
+                            break;
+                        case MenuButton::TUTORIAL:
+                            // TODO: Implement tutorial screen
+                            break;
+                        case MenuButton::SETTINGS:
+                            // TODO: Implement settings screen
+                            break;
+                        case MenuButton::EXIT:
+                            quit = true;
+                            break;
+                    }
+                    break;
+                }
             }
         }
     }
@@ -2383,50 +2475,85 @@ private:
     }
 
     void renderMenu() {
+        // Render background
+        if (menuBackgroundTexture) {
+            SDL_RenderCopy(renderer, menuBackgroundTexture, nullptr, nullptr);
+        } else {
+            SDL_SetRenderDrawColor(renderer, 20, 20, 50, 255);
+            SDL_RenderClear(renderer);
+        }
+
+        // Render game title
         SDL_Color textColor = {255, 255, 255, 255};
-        SDL_Surface* titleSurface = TTF_RenderText_Solid(font, "Tank Game", textColor);
-        if (!titleSurface) return;
+        SDL_Surface* titleSurface = TTF_RenderText_Solid(font, "   ", textColor); //Thêm tên ở giữa màn hình
+        if (titleSurface) {
+            SDL_Texture* titleTexture = SDL_CreateTextureFromSurface(renderer, titleSurface);
+            SDL_Rect titleRect = {
+                WINDOW_WIDTH / 2 - titleSurface->w / 2,
+                50,
+                titleSurface->w,
+                titleSurface->h
+            };
+            SDL_RenderCopy(renderer, titleTexture, nullptr, &titleRect);
+            SDL_FreeSurface(titleSurface);
+            SDL_DestroyTexture(titleTexture);
+        }
 
-        SDL_Texture* titleTexture = SDL_CreateTextureFromSurface(renderer, titleSurface);
-        SDL_Rect titleRect = { WINDOW_WIDTH / 2 - titleSurface->w / 2, WINDOW_HEIGHT / 4, titleSurface->w, titleSurface->h };
-        SDL_RenderCopy(renderer, titleTexture, nullptr, &titleRect);
-        SDL_FreeSurface(titleSurface);
-        SDL_DestroyTexture(titleTexture);
+        // Update button animations
+        updateButtonAnimations();
 
-        SDL_SetRenderDrawColor(renderer, 0, 128, 255, 255);
-        SDL_Rect newGameButton = { WINDOW_WIDTH / 2 - BUTTON_WIDTH / 2, WINDOW_HEIGHT / 2 - BUTTON_HEIGHT, BUTTON_WIDTH, BUTTON_HEIGHT };
-        SDL_Rect exitButton = { WINDOW_WIDTH / 2 - BUTTON_WIDTH / 2, WINDOW_HEIGHT / 2 + BUTTON_SPACING, BUTTON_WIDTH, BUTTON_HEIGHT };
-        SDL_RenderFillRect(renderer, &newGameButton);
-        SDL_RenderFillRect(renderer, &exitButton);
+        // Render buttons with scale animation
+        for (const auto& button : menuButtons) {
+            SDL_Texture* currentTexture = button.isHovered ? button.hoverTexture : button.texture;
+            if (currentTexture) {
+                float scale = buttonAnimations[button.type].scale;
 
-        SDL_Surface* newGameSurface = TTF_RenderText_Solid(font, "New Game", textColor);
-        SDL_Surface* exitSurface = TTF_RenderText_Solid(font, "Exit", textColor);
-        if (!newGameSurface || !exitSurface) return;
+                // Calculate scaled dimensions
+                int scaledWidth = static_cast<int>(button.rect.w * scale);
+                int scaledHeight = static_cast<int>(button.rect.h * scale);
 
-        SDL_Texture* newGameTexture = SDL_CreateTextureFromSurface(renderer, newGameSurface);
-        SDL_Texture* exitTexture = SDL_CreateTextureFromSurface(renderer, exitSurface);
-        SDL_Rect newGameTextRect = { WINDOW_WIDTH / 2 - newGameSurface->w / 2, WINDOW_HEIGHT / 2 - BUTTON_HEIGHT / 2 - newGameSurface->h / 2, newGameSurface->w, newGameSurface->h };
-        SDL_Rect exitTextRect = { WINDOW_WIDTH / 2 - exitSurface->w / 2, WINDOW_HEIGHT / 2 + BUTTON_SPACING + BUTTON_HEIGHT / 2 - exitSurface->h / 2, exitSurface->w, exitSurface->h };
-        SDL_RenderCopy(renderer, newGameTexture, nullptr, &newGameTextRect);
-        SDL_RenderCopy(renderer, exitTexture, nullptr, &exitTextRect);
-        SDL_FreeSurface(newGameSurface);
-        SDL_FreeSurface(exitSurface);
-        SDL_DestroyTexture(newGameTexture);
-        SDL_DestroyTexture(exitTexture);
+                // Center the scaled button
+                int offsetX = (scaledWidth - button.rect.w) / 2;
+                int offsetY = (scaledHeight - button.rect.h) / 2;
 
-        // Render instructions
-        SDL_Surface* instructionsSurface = TTF_RenderText_Solid(font,
-            "WASD: Move, Mouse: Aim/Shoot, Q: Rapid Fire, E: Shield, S: Use Health Pack, Right-Click: Special Shot, A: Cancel Special",
-            textColor);
-        if (instructionsSurface) {
-            SDL_Texture* instructionsTexture = SDL_CreateTextureFromSurface(renderer, instructionsSurface);
-            SDL_Rect instructionsRect = { WINDOW_WIDTH / 2 - instructionsSurface->w / 2,
-                                         WINDOW_HEIGHT - 100,
-                                         instructionsSurface->w,
-                                         instructionsSurface->h };
-            SDL_RenderCopy(renderer, instructionsTexture, nullptr, &instructionsRect);
-            SDL_FreeSurface(instructionsSurface);
-            SDL_DestroyTexture(instructionsTexture);
+                SDL_Rect scaledRect = {
+                    button.rect.x - offsetX,
+                    button.rect.y - offsetY,
+                    scaledWidth,
+                    scaledHeight
+                };
+
+                SDL_RenderCopy(renderer, currentTexture, nullptr, &scaledRect);
+            } else {
+                // Fallback button rendering if texture not loaded
+                SDL_SetRenderDrawColor(renderer, button.isHovered ? 100 : 70, 100, 200, 255);
+                SDL_RenderFillRect(renderer, &button.rect);
+
+                // Render button text
+                const char* buttonText;
+                switch (button.type) {
+                    case MenuButton::START: buttonText = "Start Game"; break;
+                    case MenuButton::STATS: buttonText = "Statistics"; break;
+                    case MenuButton::TUTORIAL: buttonText = "Tutorial"; break;
+                    case MenuButton::SETTINGS: buttonText = "Settings"; break;
+                    case MenuButton::EXIT: buttonText = "Exit"; break;
+                    default: buttonText = ""; break;
+                }
+
+                SDL_Surface* textSurface = TTF_RenderText_Solid(font, buttonText, textColor);
+                if (textSurface) {
+                    SDL_Texture* textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
+                    SDL_Rect textRect = {
+                        button.rect.x + (button.rect.w - textSurface->w) / 2,
+                        button.rect.y + (button.rect.h - textSurface->h) / 2,
+                        textSurface->w,
+                        textSurface->h
+                    };
+                    SDL_RenderCopy(renderer, textTexture, nullptr, &textRect);
+                    SDL_FreeSurface(textSurface);
+                    SDL_DestroyTexture(textTexture);
+                }
+            }
         }
     }
 
@@ -2658,6 +2785,72 @@ private:
                                 static_cast<int>(WINDOW_HEIGHT * MINIMAP_SCALE) };
         SDL_RenderDrawRect(renderer, &cameraRect);
     }
+
+    void initializeMenu() {
+        // Load menu background
+        menuBackgroundTexture = ResourceManager::loadTexture("assets/images/ui/menu_background.png", renderer);
+
+        // Load hover sound
+        buttonHoverSound = ResourceManager::loadSound("assets/sounds/button_hover.mp3");
+
+        // Initialize menu buttons
+        const int buttonWidth = 330;
+        const int buttonHeight = 110;
+        const int buttonSpacing = 15;
+        const int startY = WINDOW_HEIGHT / 2 - (5 * buttonHeight + 4 * buttonSpacing) / 2;
+
+        vector<string> buttonImages = {
+            "assets/images/ui/button_start.png",
+            "assets/images/ui/button_stats.png",
+            "assets/images/ui/button_tutorial.png",
+            "assets/images/ui/button_settings.png",
+            "assets/images/ui/button_exit.png"
+        };
+
+        vector<string> buttonHoverImages = {
+            "assets/images/ui/button_start_hover.png",
+            "assets/images/ui/button_stats_hover.png",
+            "assets/images/ui/button_tutorial_hover.png",
+            "assets/images/ui/button_settings_hover.png",
+            "assets/images/ui/button_exit_hover.png"
+        };
+
+        for (int i = 0; i < 5; i++) {
+            MenuButtonInfo button;
+            button.rect.w = buttonWidth;
+            button.rect.h = buttonHeight;
+            button.rect.x = WINDOW_WIDTH / 2 - buttonWidth / 2 + 450;
+            button.rect.y = startY + i * (buttonHeight + buttonSpacing);
+            button.texture = ResourceManager::loadTexture(buttonImages[i], renderer);
+            button.hoverTexture = ResourceManager::loadTexture(buttonHoverImages[i], renderer);
+            button.isHovered = false;
+            button.type = static_cast<MenuButton>(i);
+            menuButtons.push_back(button);
+
+            // Khởi tạo animation cho nút
+            buttonAnimations[button.type] = {1.0f, 1.0f, SDL_GetTicks()};
+        }
+    }
+
+    void updateButtonAnimations() {
+        Uint32 currentTime = SDL_GetTicks();
+        float animationSpeed = 0.08f;
+
+        for (auto& [type, anim] : buttonAnimations) {
+            float deltaTime = (currentTime - anim.lastUpdateTime) / 1000.0f;
+
+            // Smoothly interpolate current scale to target scale
+            if (anim.scale != anim.targetScale) {
+                if (anim.scale < anim.targetScale) {
+                    anim.scale = min(anim.scale + animationSpeed * deltaTime * 60.0f, anim.targetScale);
+                } else {
+                    anim.scale = max(anim.scale - animationSpeed * deltaTime * 60.0f, anim.targetScale);
+                }
+            }
+
+            anim.lastUpdateTime = currentTime;
+        }
+    }
 };
 
 int main(int argc, char* argv[]) {
@@ -2695,7 +2888,7 @@ int main(int argc, char* argv[]) {
     }
 
     // Create window
-    SDL_Window* window = SDL_CreateWindow("Tank Game", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+    SDL_Window* window = SDL_CreateWindow("Bùm Bum Blasters!!!", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
                                          WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_SHOWN);
     if (!window) {
         cerr << "Window could not be created! SDL_Error: " << SDL_GetError() << endl;
@@ -2719,7 +2912,7 @@ int main(int argc, char* argv[]) {
     }
 
     // Load font
-    TTF_Font* font = TTF_OpenFont("VCR_OSD_MONO_1.001.ttf", 24);
+    TTF_Font* font = TTF_OpenFont("assets/fonts/VCR_OSD_MONO_1.001.ttf", 24);
     if (!font) {
         cerr << "Failed to load font! TTF_Error: " << TTF_GetError() << endl;
         SDL_DestroyRenderer(renderer);
