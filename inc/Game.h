@@ -80,6 +80,13 @@ private:
     int highScore = 0;
     int last5Scores[5] = {0, 0, 0, 0, 0};
 
+    bool hoverBackSettings = false;
+    bool prevHoverBackSettings = false;
+    bool hoverBackTutorial = false;
+    bool prevHoverBackTutorial = false;
+    bool hoverBackStats = false;
+    bool prevHoverBackStats = false;
+
 public:
     Game();
     ~Game();
@@ -139,6 +146,8 @@ private:
     void saveStatsToFile();
     void handleGameOverEvents(SDL_Event& e);
     void updateStatsAfterGameOver();
+    void loadSettingsFromFile();
+    void saveSettingsToFile();
 };
 
 #endif // !GAME_H

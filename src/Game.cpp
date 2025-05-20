@@ -250,6 +250,19 @@ void Game::init(SDL_Renderer* rend, TTF_Font* f) {
     initializeMenu();
 
     loadStatsFromFile();
+    loadSettingsFromFile();
+    // Áp dụng trạng thái nhạc nền và hiệu ứng đúng với settings
+    if (musicOn) {
+        Mix_VolumeMusic(musicVolume * 128 / 100);
+        Mix_ResumeMusic();
+    } else {
+        Mix_PauseMusic();
+    }
+    if (soundOn) {
+        Mix_Volume(-1, effectsVolume * 128 / 100);
+    } else {
+        Mix_Volume(-1, 0);
+    }
 }
 
 void Game::handleEvents(SDL_Event& e, bool& quit) {
@@ -2216,15 +2229,18 @@ void Game::updateButtonAnimations() {
 }
 
 void Game::handleTutorialEvents(SDL_Event& e) {
+    int mouseX, mouseY;
+    SDL_GetMouseState(&mouseX, &mouseY);
+    hoverBackTutorial = (mouseX >= WINDOW_WIDTH / 2 - BUTTON_WIDTH / 2 &&
+                        mouseX <= WINDOW_WIDTH / 2 + BUTTON_WIDTH / 2 &&
+                        mouseY >= WINDOW_HEIGHT - BUTTON_HEIGHT - 20 &&
+                        mouseY <= WINDOW_HEIGHT - 20);
+    if (hoverBackTutorial != prevHoverBackTutorial && buttonHoverSound) {
+        Mix_PlayChannel(-1, buttonHoverSound, 0);
+    }
+    prevHoverBackTutorial = hoverBackTutorial;
     if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
-        int mouseX, mouseY;
-        SDL_GetMouseState(&mouseX, &mouseY);
-
-        // Back button
-        if (mouseX >= WINDOW_WIDTH / 2 - BUTTON_WIDTH / 2 &&
-            mouseX <= WINDOW_WIDTH / 2 + BUTTON_WIDTH / 2 &&
-            mouseY >= WINDOW_HEIGHT - BUTTON_HEIGHT - 20 &&
-            mouseY <= WINDOW_HEIGHT - 20) {
+        if (hoverBackTutorial) {
             state = GameState::MENU;
         }
     }
@@ -2261,7 +2277,7 @@ void Game::renderTutorialScreen() {
     }
 
     // Render back button
-    SDL_Color buttonColor = {100, 100, 100, 255};
+    SDL_Color buttonColor = hoverBackTutorial ? SDL_Color{180, 180, 60, 255} : SDL_Color{100, 100, 100, 255};
     SDL_Rect buttonRect = {
         WINDOW_WIDTH / 2 - BUTTON_WIDTH / 2,
         WINDOW_HEIGHT - BUTTON_HEIGHT - 20,
@@ -2284,9 +2300,17 @@ void Game::handleSettingsEvents(SDL_Event& e) {
     int sliderWidth = 220;
     int sliderHeight = 8;
     int knobWidth = 14;
+    int mouseX, mouseY;
+    SDL_GetMouseState(&mouseX, &mouseY);
+    hoverBackSettings = (mouseX >= WINDOW_WIDTH / 2 - BUTTON_WIDTH / 2 &&
+                        mouseX <= WINDOW_WIDTH / 2 + BUTTON_WIDTH / 2 &&
+                        mouseY >= WINDOW_HEIGHT - BUTTON_HEIGHT - 20 &&
+                        mouseY <= WINDOW_HEIGHT - 20);
+    if (hoverBackSettings != prevHoverBackSettings && buttonHoverSound) {
+        Mix_PlayChannel(-1, buttonHoverSound, 0);
+    }
+    prevHoverBackSettings = hoverBackSettings;
     if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
-        int mouseX, mouseY;
-        SDL_GetMouseState(&mouseX, &mouseY);
         // Music checkbox
         int y = startY;
         SDL_Rect musicCheckbox = {checkboxX, y - 4, checkboxSize, checkboxSize};
@@ -2298,6 +2322,7 @@ void Game::handleSettingsEvents(SDL_Event& e) {
             } else {
                 Mix_PauseMusic();
             }
+            saveSettingsToFile();
             return;
         }
         // Music slider
@@ -2308,6 +2333,7 @@ void Game::handleSettingsEvents(SDL_Event& e) {
             musicVolume = (relX * 100) / (sliderWidth - knobWidth);
             musicVolume = std::max(0, std::min(100, musicVolume));
             if (musicOn) Mix_VolumeMusic(musicVolume * 128 / 100);
+            saveSettingsToFile();
             return;
         }
         // Sound checkbox
@@ -2317,6 +2343,7 @@ void Game::handleSettingsEvents(SDL_Event& e) {
             soundOn = !soundOn;
             int vol = soundOn ? effectsVolume * 128 / 100 : 0;
             Mix_Volume(-1, vol);
+            saveSettingsToFile();
             return;
         }
         // Effects slider
@@ -2327,6 +2354,7 @@ void Game::handleSettingsEvents(SDL_Event& e) {
             effectsVolume = (relX * 100) / (sliderWidth - knobWidth);
             effectsVolume = std::max(0, std::min(100, effectsVolume));
             if (soundOn) Mix_Volume(-1, effectsVolume * 128 / 100);
+            saveSettingsToFile();
             return;
         }
         // Back button
@@ -2351,6 +2379,7 @@ void Game::handleSettingsEvents(SDL_Event& e) {
             musicVolume = (relX * 100) / (sliderWidth - knobWidth);
             musicVolume = std::max(0, std::min(100, musicVolume));
             if (musicOn) Mix_VolumeMusic(musicVolume * 128 / 100);
+            saveSettingsToFile();
         }
         y += lineSpacing;
         if (draggingEffectsSlider) {
@@ -2358,6 +2387,7 @@ void Game::handleSettingsEvents(SDL_Event& e) {
             effectsVolume = (relX * 100) / (sliderWidth - knobWidth);
             effectsVolume = std::max(0, std::min(100, effectsVolume));
             if (soundOn) Mix_Volume(-1, effectsVolume * 128 / 100);
+            saveSettingsToFile();
         }
     }
 }
@@ -2420,7 +2450,7 @@ void Game::renderSettingsScreen() {
     SDL_RenderFillRect(renderer, &effectsKnob);
     renderText(to_string(effectsVolume), valueX, y, textColor);
     // Back button
-    SDL_Color buttonColor = {100, 100, 100, 255};
+    SDL_Color buttonColor = hoverBackSettings ? SDL_Color{180, 180, 60, 255} : SDL_Color{100, 100, 100, 255};
     SDL_Rect buttonRect = {
         WINDOW_WIDTH / 2 - BUTTON_WIDTH / 2,
         WINDOW_HEIGHT - BUTTON_HEIGHT - 20,
@@ -2429,13 +2459,21 @@ void Game::renderSettingsScreen() {
     };
     SDL_SetRenderDrawColor(renderer, buttonColor.r, buttonColor.g, buttonColor.b, buttonColor.a);
     SDL_RenderFillRect(renderer, &buttonRect);
-    renderText("BACK", WINDOW_WIDTH / 2 - 30, WINDOW_HEIGHT - BUTTON_HEIGHT - 10, titleColor);
+    renderText("BACK", WINDOW_WIDTH / 2 - 30, WINDOW_HEIGHT - BUTTON_HEIGHT - 10, {255,255,255,255});
 }
 
 void Game::handleStatsEvents(SDL_Event& e) {
+    int mouseX, mouseY;
+    SDL_GetMouseState(&mouseX, &mouseY);
+    hoverBackStats = (mouseX >= WINDOW_WIDTH / 2 - BUTTON_WIDTH / 2 &&
+                        mouseX <= WINDOW_WIDTH / 2 + BUTTON_WIDTH / 2 &&
+                        mouseY >= WINDOW_HEIGHT - BUTTON_HEIGHT - 20 &&
+                        mouseY <= WINDOW_HEIGHT - 20);
+    if (hoverBackStats != prevHoverBackStats && buttonHoverSound) {
+        Mix_PlayChannel(-1, buttonHoverSound, 0);
+    }
+    prevHoverBackStats = hoverBackStats;
     if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
-        int mouseX, mouseY;
-        SDL_GetMouseState(&mouseX, &mouseY);
         // Back button
         if (mouseX >= WINDOW_WIDTH / 2 - BUTTON_WIDTH / 2 &&
             mouseX <= WINDOW_WIDTH / 2 + BUTTON_WIDTH / 2 &&
@@ -2470,7 +2508,7 @@ void Game::renderStatsScreen() {
         y += 30;
     }
     // Back button
-    SDL_Color buttonColor = {100, 100, 100, 255};
+    SDL_Color buttonColor = hoverBackStats ? SDL_Color{180, 180, 60, 255} : SDL_Color{100, 100, 100, 255};
     SDL_Rect buttonRect = {
         WINDOW_WIDTH / 2 - BUTTON_WIDTH / 2,
         WINDOW_HEIGHT - BUTTON_HEIGHT - 20,
@@ -2479,7 +2517,7 @@ void Game::renderStatsScreen() {
     };
     SDL_SetRenderDrawColor(renderer, buttonColor.r, buttonColor.g, buttonColor.b, buttonColor.a);
     SDL_RenderFillRect(renderer, &buttonRect);
-    renderText("BACK", WINDOW_WIDTH / 2 - 30, WINDOW_HEIGHT - BUTTON_HEIGHT - 10, titleColor);
+    renderText("BACK", WINDOW_WIDTH / 2 - 30, WINDOW_HEIGHT - BUTTON_HEIGHT - 10, {255,255,255,255});
 }
 
 void Game::loadStatsFromFile() {
@@ -2505,4 +2543,18 @@ void Game::updateStatsAfterGameOver() {
         last5Scores[0] = stats.score;
         saveStatsToFile();
     }
+}
+
+void Game::loadSettingsFromFile() {
+    std::ifstream fin("settings.txt");
+    if (fin) {
+        fin >> musicOn >> soundOn >> musicVolume >> effectsVolume;
+    }
+    fin.close();
+}
+
+void Game::saveSettingsToFile() {
+    std::ofstream fout("settings.txt");
+    fout << musicOn << " " << soundOn << " " << musicVolume << " " << effectsVolume << std::endl;
+    fout.close();
 }
