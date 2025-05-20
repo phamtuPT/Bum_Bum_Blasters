@@ -3,11 +3,18 @@ SDL_DIR = ./lib
 
 # Explicitly list all source directory patterns to ensure we capture everything
 SOURCES = main.cpp \
-	$(wildcard src/*.cpp)
+	src/core/Game.cpp \
+	src/entities/base/Tank.cpp \
+	src/entities/base/Bullet.cpp \
+	src/entities/powerup/PowerUp.cpp \
+	src/utils/Explosion.cpp \
+	src/utils/ParticleSystem.cpp \
+	src/managers/ResourceManager.cpp \
+	src/utils/KillNotification.cpp
 
 # Default target - builds the game with all source files
 all:
-	g++ -I ./inc \
+	g++ -I ./src \
 		-I $(SDL_DIR)/SDL2/include \
 		-I $(SDL_DIR)/SDL2/include/SDL2 \
 		-I $(SDL_DIR)/SDL2_image/include/SDL2 \
