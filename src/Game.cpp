@@ -971,60 +971,71 @@ void Game::handleRapidFire(float deltaTime) {
 }
 
 void Game::spawnEnemy() {
+    // Get current view boundaries
     float viewLeft = cameraX;
     float viewRight = cameraX + WINDOW_WIDTH;
     float viewTop = cameraY;
     float viewBottom = cameraY + WINDOW_HEIGHT;
-    vector<int> validEdges;
 
-    if (viewTop > 0) validEdges.push_back(0);
-    if (viewRight < MAP_WIDTH) validEdges.push_back(1);
-    if (viewBottom < MAP_HEIGHT) validEdges.push_back(2);
-    if (viewLeft > 0) validEdges.push_back(3);
+    // Keep track of last spawn edge
+    static int lastSpawnEdge = -1;
+    
+    // Select spawn edge (0: top, 1: right, 2: bottom, 3: left)
+    mt19937 rng(chrono::steady_clock::now().time_since_epoch().count());
+    vector<int> availableEdges = {0, 1, 2, 3};
+    
+    // Remove last used edge from available edges
+    if (lastSpawnEdge >= 0) {
+        availableEdges.erase(remove(availableEdges.begin(), availableEdges.end(), lastSpawnEdge), availableEdges.end());
+    }
+    
+    // Randomly select from available edges
+    uniform_int_distribution<int> edgeDist(0, availableEdges.size() - 1);
+    int selectedEdge = availableEdges[edgeDist(rng)];
+    lastSpawnEdge = selectedEdge;
 
-    if (validEdges.empty()) validEdges = {0, 1, 2, 3};
+    float x, y;
+    // Generate spawn position based on selected edge
+    switch (selectedEdge) {
+        case 0: // Top edge
+            x = BORDER_OFFSET + rand() % (MAP_WIDTH - 2 * BORDER_OFFSET);
+            y = BORDER_OFFSET - 30.0f;
+            break;
+        case 1: // Right edge
+            x = MAP_WIDTH - BORDER_OFFSET + 30.0f;
+            y = BORDER_OFFSET + rand() % (MAP_HEIGHT - 2 * BORDER_OFFSET);
+            break;
+        case 2: // Bottom edge
+            x = BORDER_OFFSET + rand() % (MAP_WIDTH - 2 * BORDER_OFFSET);
+            y = MAP_HEIGHT - BORDER_OFFSET + 30.0f;
+            break;
+        case 3: // Left edge
+            x = BORDER_OFFSET - 30.0f;
+            y = BORDER_OFFSET + rand() % (MAP_HEIGHT - 2 * BORDER_OFFSET);
+            break;
+    }
 
-    array<float, 4> distances = {
-        abs(player.y - BORDER_OFFSET),
-        abs(player.x - (MAP_WIDTH - BORDER_OFFSET)),
-        abs(player.y - (MAP_HEIGHT - BORDER_OFFSET)),
-        abs(player.x - BORDER_OFFSET)
-    };
-
-    float maxDistance = -1.0f;
-    int chosenEdge = validEdges[0];
-    for (int edge : validEdges) {
-        if (distances[edge] > maxDistance) {
-            maxDistance = distances[edge];
-            chosenEdge = edge;
+    // Check if spawn position is too close to other enemies
+    bool tooClose = false;
+    for (const auto& enemy : enemies) {
+        if (enemy.alive) {
+            float dx = x - enemy.x;
+            float dy = y - enemy.y;
+            float distance = sqrt(dx * dx + dy * dy);
+            if (distance < 100.0f) { // Minimum distance between enemies
+                tooClose = true;
+                break;
+            }
         }
     }
 
-    float x, y;
-    switch (chosenEdge) {
-        case 0: x = BORDER_OFFSET + rand() % (MAP_WIDTH - 2 * BORDER_OFFSET);
-            y = BORDER_OFFSET - 30.0f;
-            break;
-
-        case 1: x = MAP_WIDTH - BORDER_OFFSET + 30.0f;
-            y = BORDER_OFFSET + rand() % (MAP_HEIGHT - 2 * BORDER_OFFSET);
-            break;
-
-        case 2: x = BORDER_OFFSET + rand() % (MAP_WIDTH - 2 * BORDER_OFFSET);
-            y = MAP_HEIGHT - BORDER_OFFSET + 30.0f;
-            break;
-
-        case 3: x = BORDER_OFFSET - 30.0f;
-            y = BORDER_OFFSET + rand() % (MAP_HEIGHT - 2 * BORDER_OFFSET);
-            break;
-
-        default:
-            break;
+    // If too close to other enemies, try again next frame
+    if (tooClose) {
+        return;
     }
 
     // Randomly choose enemy type based on difficulty
     uniform_int_distribution<int> typeDist(0, 99);
-    mt19937 rng(chrono::steady_clock::now().time_since_epoch().count());
     int roll = typeDist(rng);
     EnemyType enemyType;
 
