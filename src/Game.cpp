@@ -263,6 +263,9 @@ void Game::init(SDL_Renderer* rend, TTF_Font* f) {
     } else {
         Mix_Volume(-1, 0);
     }
+
+    startGameSound = ResourceManager::getSound("assets/sounds/start_game.mp3");
+    if (!startGameSound) std::cout << "Không load được startGameSound!" << std::endl;
 }
 
 void Game::handleEvents(SDL_Event& e, bool& quit) {
@@ -586,6 +589,7 @@ void Game::handleMenuEvents(SDL_Event& e) {
                 mouseY <= button.rect.y + button.rect.h) {
                 switch (button.type) {
                     case MenuButton::START:
+                        if (startGameSound) Mix_PlayChannel(-1, startGameSound, 0);
                         state = GameState::PLAYING;
                         reset();
                         break;
@@ -615,22 +619,31 @@ void Game::handleMenuEvents(SDL_Event& e) {
 }
 
 void Game::handlePauseEvents(SDL_Event& e) {
+    int mouseX, mouseY;
+    SDL_GetMouseState(&mouseX, &mouseY);
+    SDL_Rect resumeButton = {
+        WINDOW_WIDTH / 2 - BUTTON_WIDTH / 2, WINDOW_HEIGHT / 2 - BUTTON_HEIGHT, BUTTON_WIDTH, BUTTON_HEIGHT
+    };
+    SDL_Rect menuButton = {
+        WINDOW_WIDTH / 2 - BUTTON_WIDTH / 2, WINDOW_HEIGHT / 2 + BUTTON_SPACING, BUTTON_WIDTH, BUTTON_HEIGHT
+    };
+    hoverPauseResume = (mouseX >= resumeButton.x && mouseX <= resumeButton.x + BUTTON_WIDTH &&
+                        mouseY >= resumeButton.y && mouseY <= resumeButton.y + BUTTON_HEIGHT);
+    hoverPauseMenu = (mouseX >= menuButton.x && mouseX <= menuButton.x + BUTTON_WIDTH &&
+                      mouseY >= menuButton.y && mouseY <= menuButton.y + BUTTON_HEIGHT);
+    if (hoverPauseResume != prevHoverPauseResume && buttonHoverSound) {
+        Mix_PlayChannel(-1, buttonHoverSound, 0);
+    }
+    if (hoverPauseMenu != prevHoverPauseMenu && buttonHoverSound) {
+        Mix_PlayChannel(-1, buttonHoverSound, 0);
+    }
+    prevHoverPauseResume = hoverPauseResume;
+    prevHoverPauseMenu = hoverPauseMenu;
     if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
-        int mouseX, mouseY;
-        SDL_GetMouseState(&mouseX, &mouseY);
-
-        // Resume button
-        if (mouseX >= WINDOW_WIDTH / 2 - BUTTON_WIDTH / 2 &&
-            mouseX <= WINDOW_WIDTH / 2 + BUTTON_WIDTH / 2 &&
-            mouseY >= WINDOW_HEIGHT / 2 - BUTTON_HEIGHT &&
-            mouseY <= WINDOW_HEIGHT / 2) {
+        if (hoverPauseResume) {
             state = GameState::PLAYING;
             paused = false;
-        } else if (mouseX >= WINDOW_WIDTH / 2 - BUTTON_WIDTH / 2 &&
-                   mouseX <= WINDOW_WIDTH / 2 + BUTTON_WIDTH / 2 &&
-                   mouseY >= WINDOW_HEIGHT / 2 + BUTTON_SPACING &&
-                   mouseY <= WINDOW_HEIGHT / 2 + BUTTON_HEIGHT + BUTTON_SPACING) {
-            // Main Menu button
+        } else if (hoverPauseMenu) {
             state = GameState::MENU;
         }
     }
@@ -1906,14 +1919,17 @@ void Game::renderPauseMenu() {
     SDL_FreeSurface(pauseSurface);
     SDL_DestroyTexture(pauseTexture);
 
-    SDL_SetRenderDrawColor(renderer, 0, 128, 255, 255);
+    SDL_Color resumeColor = hoverPauseResume ? SDL_Color{180, 180, 60, 255} : SDL_Color{0, 128, 255, 255};
+    SDL_Color menuColor = hoverPauseMenu ? SDL_Color{180, 180, 60, 255} : SDL_Color{0, 128, 255, 255};
     SDL_Rect resumeButton = {
         WINDOW_WIDTH / 2 - BUTTON_WIDTH / 2, WINDOW_HEIGHT / 2 - BUTTON_HEIGHT, BUTTON_WIDTH, BUTTON_HEIGHT
     };
     SDL_Rect menuButton = {
         WINDOW_WIDTH / 2 - BUTTON_WIDTH / 2, WINDOW_HEIGHT / 2 + BUTTON_SPACING, BUTTON_WIDTH, BUTTON_HEIGHT
     };
+    SDL_SetRenderDrawColor(renderer, resumeColor.r, resumeColor.g, resumeColor.b, resumeColor.a);
     SDL_RenderFillRect(renderer, &resumeButton);
+    SDL_SetRenderDrawColor(renderer, menuColor.r, menuColor.g, menuColor.b, menuColor.a);
     SDL_RenderFillRect(renderer, &menuButton);
 
     SDL_Surface* resumeSurface = TTF_RenderText_Solid(font, "Resume", textColor);

@@ -32,6 +32,7 @@ private:
     Mix_Chunk* shieldDeactivateSound; // New sound for shield deactivation
     Mix_Chunk* healSound;             // New sound for healing
     Mix_Chunk* buttonHoverSound;      // New: Sound for button hover
+    Mix_Chunk* startGameSound = nullptr;
     SDL_Texture* playerTexture;
     SDL_Texture* playerShieldTexture; // New texture for shield animation
     SDL_Texture* enemyTexture;
@@ -86,6 +87,11 @@ private:
     bool prevHoverBackTutorial = false;
     bool hoverBackStats = false;
     bool prevHoverBackStats = false;
+
+    bool hoverPauseResume = false;
+    bool prevHoverPauseResume = false;
+    bool hoverPauseMenu = false;
+    bool prevHoverPauseMenu = false;
 
 public:
     Game();
