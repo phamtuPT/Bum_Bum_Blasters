@@ -275,6 +275,8 @@ void Game::handleEvents(SDL_Event& e, bool& quit) {
         reset();
     } else if (state == GameState::TUTORIAL_SCREEN) {
         handleTutorialEvents(e);
+    } else if (state == GameState::SETTINGS_SCREEN) {
+        handleSettingsEvents(e);
     }
 }
 
@@ -402,6 +404,8 @@ void Game::render() {
         renderGameOver();
     } else if (state == GameState::TUTORIAL_SCREEN) {
         renderTutorialScreen();
+    } else if (state == GameState::SETTINGS_SCREEN) {
+        renderSettingsScreen();
     }
 
     SDL_RenderPresent(renderer);
@@ -572,7 +576,7 @@ void Game::handleMenuEvents(SDL_Event& e) {
                         break;
 
                     case MenuButton::SETTINGS:
-                        // TODO: Implement settings screen
+                        state = GameState::SETTINGS_SCREEN;
                         break;
 
                     case MenuButton::EXIT:
@@ -2222,6 +2226,96 @@ void Game::renderTutorialScreen() {
     }
 
     // Render back button
+    SDL_Color buttonColor = {100, 100, 100, 255};
+    SDL_Rect buttonRect = {
+        WINDOW_WIDTH / 2 - BUTTON_WIDTH / 2,
+        WINDOW_HEIGHT - BUTTON_HEIGHT - 20,
+        BUTTON_WIDTH,
+        BUTTON_HEIGHT
+    };
+    SDL_SetRenderDrawColor(renderer, buttonColor.r, buttonColor.g, buttonColor.b, buttonColor.a);
+    SDL_RenderFillRect(renderer, &buttonRect);
+    renderText("BACK", WINDOW_WIDTH / 2 - 30, WINDOW_HEIGHT - BUTTON_HEIGHT - 10, titleColor);
+}
+
+void Game::handleSettingsEvents(SDL_Event& e) {
+    int y = 150;
+    int optionHeight = 40;
+    int optionWidth = 300;
+    int optionX = WINDOW_WIDTH / 2 - 120;
+    if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+        int mouseX, mouseY;
+        SDL_GetMouseState(&mouseX, &mouseY);
+        // Music On/Off
+        if (mouseX >= optionX && mouseX <= optionX + optionWidth && mouseY >= y && mouseY <= y + optionHeight) {
+            musicOn = !musicOn;
+            if (musicOn && backgroundMusic) {
+                Mix_VolumeMusic(musicVolume);
+                Mix_ResumeMusic();
+            } else {
+                Mix_PauseMusic();
+            }
+        }
+        // Sound On/Off
+        y += 50;
+        if (mouseX >= optionX && mouseX <= optionX + optionWidth && mouseY >= y && mouseY <= y + optionHeight) {
+            soundOn = !soundOn;
+            int vol = soundOn ? effectsVolume : 0;
+            Mix_Volume(-1, vol);
+        }
+        // Music Volume - click left/right để giảm/tăng
+        y += 50;
+        if (mouseX >= optionX && mouseX <= optionX + optionWidth && mouseY >= y && mouseY <= y + optionHeight) {
+            if (mouseX < optionX + optionWidth / 2) {
+                musicVolume = max(0, musicVolume - 10);
+            } else {
+                musicVolume = min(128, musicVolume + 10);
+            }
+            if (musicOn) Mix_VolumeMusic(musicVolume);
+        }
+        // Effects Volume - click trái/phải để giảm/tăng
+        y += 50;
+        if (mouseX >= optionX && mouseX <= optionX + optionWidth && mouseY >= y && mouseY <= y + optionHeight) {
+            if (mouseX < optionX + optionWidth / 2) {
+                effectsVolume = max(0, effectsVolume - 10);
+            } else {
+                effectsVolume = min(128, effectsVolume + 10);
+            }
+            if (soundOn) Mix_Volume(-1, effectsVolume);
+        }
+        // Back button
+        if (mouseX >= WINDOW_WIDTH / 2 - BUTTON_WIDTH / 2 &&
+            mouseX <= WINDOW_WIDTH / 2 + BUTTON_WIDTH / 2 &&
+            mouseY >= WINDOW_HEIGHT - BUTTON_HEIGHT - 20 &&
+            mouseY <= WINDOW_HEIGHT - 20) {
+            state = GameState::MENU;
+        }
+    }
+}
+
+void Game::renderSettingsScreen() {
+    SDL_SetRenderDrawColor(renderer, 30, 30, 30, 255);
+    SDL_RenderClear(renderer);
+    SDL_Color titleColor = {255, 255, 255, 255};
+    renderText("SETTINGS", WINDOW_WIDTH / 2 - 80, 50, titleColor);
+    SDL_Color textColor = {200, 200, 200, 255};
+    int y = 150;
+    // Music On/Off
+    string musicStr = string("Music: ") + (musicOn ? "ON" : "OFF");
+    renderText(musicStr, WINDOW_WIDTH / 2 - 120, y, textColor);
+    // Sound On/Off
+    y += 50;
+    string soundStr = string("Sound Effects: ") + (soundOn ? "ON" : "OFF");
+    renderText(soundStr, WINDOW_WIDTH / 2 - 120, y, textColor);
+    // Music Volume
+    y += 50;
+    string musicVolStr = "Music Volume: " + to_string(musicVolume);
+    renderText(musicVolStr, WINDOW_WIDTH / 2 - 120, y, textColor);
+    // Effects Volume
+    y += 50;
+    string effectsVolStr = "Effects Volume: " + to_string(effectsVolume);
+    renderText(effectsVolStr, WINDOW_WIDTH / 2 - 120, y, textColor);
+    // Back button
     SDL_Color buttonColor = {100, 100, 100, 255};
     SDL_Rect buttonRect = {
         WINDOW_WIDTH / 2 - BUTTON_WIDTH / 2,

@@ -69,6 +69,12 @@ private:
 
     unordered_map<MenuButton, ButtonAnimation> buttonAnimations;
 
+    // Settings
+    bool musicOn = true;
+    bool soundOn = true;
+    int musicVolume = 100; // 0-128 cho SDL_mixer
+    int effectsVolume = 100; // 0-128 cho SDL_mixer
+
 public:
     Game();
     ~Game();
@@ -87,6 +93,7 @@ private:
     void handlePauseEvents(SDL_Event& e);
     void handleGameEvents(SDL_Event& e);
     void handleTutorialEvents(SDL_Event& e);
+    void handleSettingsEvents(SDL_Event& e);
     void useHealthPickup();
     void activateShield();
     void activateScreenShake(float intensity, Uint32 duration);
@@ -120,6 +127,7 @@ private:
     void updateButtonAnimations();
     void renderPauseScreen();
     void renderTutorialScreen();
+    void renderSettingsScreen();
 };
 
 #endif // !GAME_H
