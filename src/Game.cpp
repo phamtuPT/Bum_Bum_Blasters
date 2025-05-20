@@ -1995,41 +1995,60 @@ void Game::renderGameOver() {
         SDL_DestroyTexture(scoreTexture);
     }
 
-    // Nút Restart
-    SDL_Color buttonColor = {100, 100, 100, 255};
+    // Restart button
+    SDL_Color restartButtonColor = hoverGameOverRestart ? SDL_Color{180, 180, 60, 255} : SDL_Color{100, 100, 100, 255};
     SDL_Rect restartButton = {
         WINDOW_WIDTH / 2 - BUTTON_WIDTH - 10, WINDOW_HEIGHT / 2 + 60, BUTTON_WIDTH, BUTTON_HEIGHT
     };
-    SDL_SetRenderDrawColor(renderer, buttonColor.r, buttonColor.g, buttonColor.b, buttonColor.a);
+    SDL_SetRenderDrawColor(renderer, restartButtonColor.r, restartButtonColor.g, restartButtonColor.b, restartButtonColor.a);
     SDL_RenderFillRect(renderer, &restartButton);
     renderText("RESTART", restartButton.x + BUTTON_WIDTH / 2 - 50, restartButton.y + BUTTON_HEIGHT / 2 - 15, {255,255,255,255});
 
-    // Nút Menu
+    // Menu button
+    SDL_Color menuButtonColor = hoverGameOverMenu ? SDL_Color{180, 180, 60, 255} : SDL_Color{100, 100, 100, 255};
     SDL_Rect menuButton = {
         WINDOW_WIDTH / 2 + 10, WINDOW_HEIGHT / 2 + 60, BUTTON_WIDTH, BUTTON_HEIGHT
     };
-    SDL_SetRenderDrawColor(renderer, buttonColor.r, buttonColor.g, buttonColor.b, buttonColor.a);
+    SDL_SetRenderDrawColor(renderer, menuButtonColor.r, menuButtonColor.g, menuButtonColor.b, menuButtonColor.a);
     SDL_RenderFillRect(renderer, &menuButton);
     renderText("MENU", menuButton.x + BUTTON_WIDTH / 2 - 35, menuButton.y + BUTTON_HEIGHT / 2 - 15, {255,255,255,255});
 }
 
 // Xử lý sự kiện cho nút Game Over
 void Game::handleGameOverEvents(SDL_Event& e) {
+    int mouseX, mouseY;
+    SDL_GetMouseState(&mouseX, &mouseY);
+    
+    SDL_Rect restartButton = {
+        WINDOW_WIDTH / 2 - BUTTON_WIDTH - 10, WINDOW_HEIGHT / 2 + 60, BUTTON_WIDTH, BUTTON_HEIGHT
+    };
+    SDL_Rect menuButton = {
+        WINDOW_WIDTH / 2 + 10, WINDOW_HEIGHT / 2 + 60, BUTTON_WIDTH, BUTTON_HEIGHT
+    };
+
+    // Update hover states
+    hoverGameOverRestart = (mouseX >= restartButton.x && mouseX <= restartButton.x + BUTTON_WIDTH &&
+                           mouseY >= restartButton.y && mouseY <= restartButton.y + BUTTON_HEIGHT);
+    hoverGameOverMenu = (mouseX >= menuButton.x && mouseX <= menuButton.x + BUTTON_WIDTH &&
+                        mouseY >= menuButton.y && mouseY <= menuButton.y + BUTTON_HEIGHT);
+
+    // Play hover sound when hover state changes
+    if (hoverGameOverRestart != prevHoverGameOverRestart && buttonHoverSound) {
+        Mix_PlayChannel(-1, buttonHoverSound, 0);
+    }
+    if (hoverGameOverMenu != prevHoverGameOverMenu && buttonHoverSound) {
+        Mix_PlayChannel(-1, buttonHoverSound, 0);
+    }
+
+    // Update previous hover states
+    prevHoverGameOverRestart = hoverGameOverRestart;
+    prevHoverGameOverMenu = hoverGameOverMenu;
+
     if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
-        int mouseX, mouseY;
-        SDL_GetMouseState(&mouseX, &mouseY);
-        SDL_Rect restartButton = {
-            WINDOW_WIDTH / 2 - BUTTON_WIDTH - 10, WINDOW_HEIGHT / 2 + 60, BUTTON_WIDTH, BUTTON_HEIGHT
-        };
-        SDL_Rect menuButton = {
-            WINDOW_WIDTH / 2 + 10, WINDOW_HEIGHT / 2 + 60, BUTTON_WIDTH, BUTTON_HEIGHT
-        };
-        if (mouseX >= restartButton.x && mouseX <= restartButton.x + BUTTON_WIDTH &&
-            mouseY >= restartButton.y && mouseY <= restartButton.y + BUTTON_HEIGHT) {
+        if (hoverGameOverRestart) {
             state = GameState::PLAYING;
             reset();
-        } else if (mouseX >= menuButton.x && mouseX <= menuButton.x + BUTTON_WIDTH &&
-                   mouseY >= menuButton.y && mouseY <= menuButton.y + BUTTON_HEIGHT) {
+        } else if (hoverGameOverMenu) {
             state = GameState::MENU;
         }
     }

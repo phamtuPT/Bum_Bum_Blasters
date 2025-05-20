@@ -93,6 +93,12 @@ private:
     bool hoverPauseMenu = false;
     bool prevHoverPauseMenu = false;
 
+    // Game over button hover states
+    bool hoverGameOverRestart = false;
+    bool prevHoverGameOverRestart = false;
+    bool hoverGameOverMenu = false;
+    bool prevHoverGameOverMenu = false;
+
 public:
     Game();
     ~Game();
