@@ -83,9 +83,10 @@ private:
 
     void handleSpecialAbility(float deltaTime);
     void renderSpecialTargetingLine();
-    void handleMenuEvents(SDL_Event& e, bool& quit);
+    void handleMenuEvents(SDL_Event& e);
     void handlePauseEvents(SDL_Event& e);
     void handleGameEvents(SDL_Event& e);
+    void handleTutorialEvents(SDL_Event& e);
     void useHealthPickup();
     void activateShield();
     void activateScreenShake(float intensity, Uint32 duration);
@@ -117,6 +118,8 @@ private:
     void renderMinimap();
     void initializeMenu();
     void updateButtonAnimations();
+    void renderPauseScreen();
+    void renderTutorialScreen();
 };
 
 #endif // !GAME_H

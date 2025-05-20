@@ -265,7 +265,7 @@ void Game::handleEvents(SDL_Event& e, bool& quit) {
     }
 
     if (state == GameState::MENU) {
-        handleMenuEvents(e, quit);
+        handleMenuEvents(e);
     } else if (state == GameState::PLAYING && player.alive) {
         handleGameEvents(e);
     } else if (state == GameState::PAUSED) {
@@ -273,6 +273,8 @@ void Game::handleEvents(SDL_Event& e, bool& quit) {
     } else if (state == GameState::GAME_OVER && e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_r) {
         state = GameState::PLAYING;
         reset();
+    } else if (state == GameState::TUTORIAL_SCREEN) {
+        handleTutorialEvents(e);
     }
 }
 
@@ -398,6 +400,8 @@ void Game::render() {
     } else if (state == GameState::GAME_OVER) {
         renderGame();
         renderGameOver();
+    } else if (state == GameState::TUTORIAL_SCREEN) {
+        renderTutorialScreen();
     }
 
     SDL_RenderPresent(renderer);
@@ -516,7 +520,7 @@ void Game::renderSpecialTargetingLine() {
     }
 }
 
-void Game::handleMenuEvents(SDL_Event& e, bool& quit) {
+void Game::handleMenuEvents(SDL_Event& e) {
     if (e.type == SDL_MOUSEMOTION) {
         int mouseX = e.motion.x;
         int mouseY = e.motion.y;
@@ -564,7 +568,7 @@ void Game::handleMenuEvents(SDL_Event& e, bool& quit) {
                         break;
 
                     case MenuButton::TUTORIAL:
-                        // TODO: Implement tutorial screen
+                        state = GameState::TUTORIAL_SCREEN;
                         break;
 
                     case MenuButton::SETTINGS:
@@ -572,7 +576,9 @@ void Game::handleMenuEvents(SDL_Event& e, bool& quit) {
                         break;
 
                     case MenuButton::EXIT:
-                        quit = true;
+                        SDL_Event quitEvent;
+                        quitEvent.type = SDL_QUIT;
+                        SDL_PushEvent(&quitEvent);
                         break;
                 }
                 break;
@@ -2168,4 +2174,62 @@ void Game::updateButtonAnimations() {
 
         anim.lastUpdateTime = currentTime;
     }
+}
+
+void Game::handleTutorialEvents(SDL_Event& e) {
+    if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+        int mouseX, mouseY;
+        SDL_GetMouseState(&mouseX, &mouseY);
+
+        // Back button
+        if (mouseX >= WINDOW_WIDTH / 2 - BUTTON_WIDTH / 2 &&
+            mouseX <= WINDOW_WIDTH / 2 + BUTTON_WIDTH / 2 &&
+            mouseY >= WINDOW_HEIGHT - BUTTON_HEIGHT - 20 &&
+            mouseY <= WINDOW_HEIGHT - 20) {
+            state = GameState::MENU;
+        }
+    }
+}
+
+void Game::renderTutorialScreen() {
+    // Clear screen
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderClear(renderer);
+
+    // Render tutorial title
+    SDL_Color titleColor = {255, 255, 255, 255};
+    renderText("HOW TO PLAY", WINDOW_WIDTH / 2 - 100, 50, titleColor);
+
+    // Render tutorial content
+    SDL_Color textColor = {200, 200, 200, 255};
+    vector<string> tutorialText = {
+        "WASD - Move your tank",
+        "Left Click - Shoot",
+        "Right Click - Special bullet (when available)",
+        "E - Activate shield",
+        "Q - Rapid fire",
+        "T - Use health pack",
+        "",
+        "Survive as long as possible!",
+        "Collect power-ups to enhance your abilities.",
+        "Destroy enemy tanks to earn points."
+    };
+
+    int y = 120;
+    for (const string& text : tutorialText) {
+        renderText(text, WINDOW_WIDTH / 2 - 200, y, textColor);
+        y += 30;
+    }
+
+    // Render back button
+    SDL_Color buttonColor = {100, 100, 100, 255};
+    SDL_Rect buttonRect = {
+        WINDOW_WIDTH / 2 - BUTTON_WIDTH / 2,
+        WINDOW_HEIGHT - BUTTON_HEIGHT - 20,
+        BUTTON_WIDTH,
+        BUTTON_HEIGHT
+    };
+    SDL_SetRenderDrawColor(renderer, buttonColor.r, buttonColor.g, buttonColor.b, buttonColor.a);
+    SDL_RenderFillRect(renderer, &buttonRect);
+    renderText("BACK", WINDOW_WIDTH / 2 - 30, WINDOW_HEIGHT - BUTTON_HEIGHT - 10, titleColor);
 }
