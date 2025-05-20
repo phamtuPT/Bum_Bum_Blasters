@@ -277,6 +277,8 @@ void Game::handleEvents(SDL_Event& e, bool& quit) {
         handleTutorialEvents(e);
     } else if (state == GameState::SETTINGS_SCREEN) {
         handleSettingsEvents(e);
+    } else if (state == GameState::STATS_SCREEN) {
+        handleStatsEvents(e);
     }
 }
 
@@ -406,6 +408,8 @@ void Game::render() {
         renderTutorialScreen();
     } else if (state == GameState::SETTINGS_SCREEN) {
         renderSettingsScreen();
+    } else if (state == GameState::STATS_SCREEN) {
+        renderStatsScreen();
     }
 
     SDL_RenderPresent(renderer);
@@ -568,7 +572,7 @@ void Game::handleMenuEvents(SDL_Event& e) {
                         break;
 
                     case MenuButton::STATS:
-                        // TODO: Implement stats screen
+                        state = GameState::STATS_SCREEN;
                         break;
 
                     case MenuButton::TUTORIAL:
@@ -2239,49 +2243,60 @@ void Game::renderTutorialScreen() {
 }
 
 void Game::handleSettingsEvents(SDL_Event& e) {
-    int y = 150;
-    int optionHeight = 40;
-    int optionWidth = 300;
-    int optionX = WINDOW_WIDTH / 2 - 120;
+    int startY = 180;
+    int lineSpacing = 70;
+    int labelX = WINDOW_WIDTH / 2 - 350;
+    int checkboxX = WINDOW_WIDTH / 2 - 120;
+    int volumeLabelX = WINDOW_WIDTH / 2 - 40;
+    int sliderX = WINDOW_WIDTH / 2 + 60;
+    int checkboxSize = 28;
+    int sliderWidth = 220;
+    int sliderHeight = 8;
+    int knobWidth = 14;
     if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
         int mouseX, mouseY;
         SDL_GetMouseState(&mouseX, &mouseY);
-        // Music On/Off
-        if (mouseX >= optionX && mouseX <= optionX + optionWidth && mouseY >= y && mouseY <= y + optionHeight) {
+        // Music checkbox
+        int y = startY;
+        SDL_Rect musicCheckbox = {checkboxX, y - 4, checkboxSize, checkboxSize};
+        if (mouseX >= musicCheckbox.x && mouseX <= musicCheckbox.x + checkboxSize && mouseY >= musicCheckbox.y && mouseY <= musicCheckbox.y + checkboxSize) {
             musicOn = !musicOn;
             if (musicOn && backgroundMusic) {
-                Mix_VolumeMusic(musicVolume);
+                Mix_VolumeMusic(musicVolume * 128 / 100);
                 Mix_ResumeMusic();
             } else {
                 Mix_PauseMusic();
             }
+            return;
         }
-        // Sound On/Off
-        y += 50;
-        if (mouseX >= optionX && mouseX <= optionX + optionWidth && mouseY >= y && mouseY <= y + optionHeight) {
+        // Music slider
+        SDL_Rect musicSlider = {sliderX, y + 10, sliderWidth, sliderHeight + 8};
+        if (mouseX >= musicSlider.x && mouseX <= musicSlider.x + sliderWidth && mouseY >= musicSlider.y && mouseY <= musicSlider.y + sliderHeight + 8) {
+            draggingMusicSlider = true;
+            int relX = mouseX - sliderX;
+            musicVolume = (relX * 100) / (sliderWidth - knobWidth);
+            musicVolume = std::max(0, std::min(100, musicVolume));
+            if (musicOn) Mix_VolumeMusic(musicVolume * 128 / 100);
+            return;
+        }
+        // Sound checkbox
+        y += lineSpacing;
+        SDL_Rect soundCheckbox = {checkboxX, y - 4, checkboxSize, checkboxSize};
+        if (mouseX >= soundCheckbox.x && mouseX <= soundCheckbox.x + checkboxSize && mouseY >= soundCheckbox.y && mouseY <= soundCheckbox.y + checkboxSize) {
             soundOn = !soundOn;
-            int vol = soundOn ? effectsVolume : 0;
+            int vol = soundOn ? effectsVolume * 128 / 100 : 0;
             Mix_Volume(-1, vol);
+            return;
         }
-        // Music Volume - click left/right để giảm/tăng
-        y += 50;
-        if (mouseX >= optionX && mouseX <= optionX + optionWidth && mouseY >= y && mouseY <= y + optionHeight) {
-            if (mouseX < optionX + optionWidth / 2) {
-                musicVolume = max(0, musicVolume - 10);
-            } else {
-                musicVolume = min(128, musicVolume + 10);
-            }
-            if (musicOn) Mix_VolumeMusic(musicVolume);
-        }
-        // Effects Volume - click trái/phải để giảm/tăng
-        y += 50;
-        if (mouseX >= optionX && mouseX <= optionX + optionWidth && mouseY >= y && mouseY <= y + optionHeight) {
-            if (mouseX < optionX + optionWidth / 2) {
-                effectsVolume = max(0, effectsVolume - 10);
-            } else {
-                effectsVolume = min(128, effectsVolume + 10);
-            }
-            if (soundOn) Mix_Volume(-1, effectsVolume);
+        // Effects slider
+        SDL_Rect effectsSlider = {sliderX, y + 10, sliderWidth, sliderHeight + 8};
+        if (mouseX >= effectsSlider.x && mouseX <= effectsSlider.x + sliderWidth && mouseY >= effectsSlider.y && mouseY <= effectsSlider.y + sliderHeight + 8) {
+            draggingEffectsSlider = true;
+            int relX = mouseX - sliderX;
+            effectsVolume = (relX * 100) / (sliderWidth - knobWidth);
+            effectsVolume = std::max(0, std::min(100, effectsVolume));
+            if (soundOn) Mix_Volume(-1, effectsVolume * 128 / 100);
+            return;
         }
         // Back button
         if (mouseX >= WINDOW_WIDTH / 2 - BUTTON_WIDTH / 2 &&
@@ -2289,6 +2304,29 @@ void Game::handleSettingsEvents(SDL_Event& e) {
             mouseY >= WINDOW_HEIGHT - BUTTON_HEIGHT - 20 &&
             mouseY <= WINDOW_HEIGHT - 20) {
             state = GameState::MENU;
+            return;
+        }
+    }
+    if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+        draggingMusicSlider = false;
+        draggingEffectsSlider = false;
+    }
+    if (e.type == SDL_MOUSEMOTION) {
+        int mouseX, mouseY;
+        SDL_GetMouseState(&mouseX, &mouseY);
+        int y = startY;
+        if (draggingMusicSlider) {
+            int relX = mouseX - sliderX;
+            musicVolume = (relX * 100) / (sliderWidth - knobWidth);
+            musicVolume = std::max(0, std::min(100, musicVolume));
+            if (musicOn) Mix_VolumeMusic(musicVolume * 128 / 100);
+        }
+        y += lineSpacing;
+        if (draggingEffectsSlider) {
+            int relX = mouseX - sliderX;
+            effectsVolume = (relX * 100) / (sliderWidth - knobWidth);
+            effectsVolume = std::max(0, std::min(100, effectsVolume));
+            if (soundOn) Mix_Volume(-1, effectsVolume * 128 / 100);
         }
     }
 }
@@ -2299,22 +2337,98 @@ void Game::renderSettingsScreen() {
     SDL_Color titleColor = {255, 255, 255, 255};
     renderText("SETTINGS", WINDOW_WIDTH / 2 - 80, 50, titleColor);
     SDL_Color textColor = {200, 200, 200, 255};
+    int startY = 180;
+    int lineSpacing = 70;
+    int labelX = WINDOW_WIDTH / 2 - 350;
+    int checkboxX = WINDOW_WIDTH / 2 - 120;
+    int volumeLabelX = WINDOW_WIDTH / 2 - 40;
+    int sliderX = WINDOW_WIDTH / 2 + 60;
+    int valueX = sliderX + 240;
+    int checkboxSize = 28;
+    int sliderWidth = 220;
+    int sliderHeight = 8;
+    int knobWidth = 14;
+    // Dòng 1: Music
+    int y = startY;
+    renderText("Music", labelX, y, textColor);
+    SDL_Rect musicCheckbox = {checkboxX, y - 4, checkboxSize, checkboxSize};
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    SDL_RenderDrawRect(renderer, &musicCheckbox);
+    if (musicOn) {
+        SDL_SetRenderDrawColor(renderer, 0, 200, 0, 255);
+        SDL_Rect tick = {checkboxX + 5, y + 2, checkboxSize - 10, checkboxSize - 12};
+        SDL_RenderFillRect(renderer, &tick);
+    }
+    renderText("Volume", volumeLabelX, y, textColor);
+    SDL_Rect musicSlider = {sliderX, y + 10, sliderWidth, sliderHeight};
+    SDL_SetRenderDrawColor(renderer, 180, 180, 180, 255);
+    SDL_RenderFillRect(renderer, &musicSlider);
+    int musicKnobX = sliderX + (musicVolume * (sliderWidth - knobWidth)) / 100;
+    SDL_SetRenderDrawColor(renderer, 0, 200, 255, 255);
+    SDL_Rect musicKnob = {musicKnobX, y + 6, knobWidth, 16};
+    SDL_RenderFillRect(renderer, &musicKnob);
+    renderText(to_string(musicVolume), valueX, y, textColor);
+    // Dòng 2: Sound Effects
+    y += lineSpacing;
+    renderText("Sound Effects", labelX, y, textColor);
+    SDL_Rect soundCheckbox = {checkboxX, y - 4, checkboxSize, checkboxSize};
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    SDL_RenderDrawRect(renderer, &soundCheckbox);
+    if (soundOn) {
+        SDL_SetRenderDrawColor(renderer, 0, 200, 0, 255);
+        SDL_Rect tick = {checkboxX + 5, y + 2, checkboxSize - 10, checkboxSize - 12};
+        SDL_RenderFillRect(renderer, &tick);
+    }
+    renderText("Volume", volumeLabelX, y, textColor);
+    SDL_Rect effectsSlider = {sliderX, y + 10, sliderWidth, sliderHeight};
+    SDL_SetRenderDrawColor(renderer, 180, 180, 180, 255);
+    SDL_RenderFillRect(renderer, &effectsSlider);
+    int effectsKnobX = sliderX + (effectsVolume * (sliderWidth - knobWidth)) / 100;
+    SDL_SetRenderDrawColor(renderer, 0, 200, 255, 255);
+    SDL_Rect effectsKnob = {effectsKnobX, y + 6, knobWidth, 16};
+    SDL_RenderFillRect(renderer, &effectsKnob);
+    renderText(to_string(effectsVolume), valueX, y, textColor);
+    // Back button
+    SDL_Color buttonColor = {100, 100, 100, 255};
+    SDL_Rect buttonRect = {
+        WINDOW_WIDTH / 2 - BUTTON_WIDTH / 2,
+        WINDOW_HEIGHT - BUTTON_HEIGHT - 20,
+        BUTTON_WIDTH,
+        BUTTON_HEIGHT
+    };
+    SDL_SetRenderDrawColor(renderer, buttonColor.r, buttonColor.g, buttonColor.b, buttonColor.a);
+    SDL_RenderFillRect(renderer, &buttonRect);
+    renderText("BACK", WINDOW_WIDTH / 2 - 30, WINDOW_HEIGHT - BUTTON_HEIGHT - 10, titleColor);
+}
+
+void Game::handleStatsEvents(SDL_Event& e) {
+    if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+        int mouseX, mouseY;
+        SDL_GetMouseState(&mouseX, &mouseY);
+        // Back button
+        if (mouseX >= WINDOW_WIDTH / 2 - BUTTON_WIDTH / 2 &&
+            mouseX <= WINDOW_WIDTH / 2 + BUTTON_WIDTH / 2 &&
+            mouseY >= WINDOW_HEIGHT - BUTTON_HEIGHT - 20 &&
+            mouseY <= WINDOW_HEIGHT - 20) {
+            state = GameState::MENU;
+        }
+    }
+}
+
+void Game::renderStatsScreen() {
+    SDL_SetRenderDrawColor(renderer, 30, 30, 30, 255);
+    SDL_RenderClear(renderer);
+    SDL_Color titleColor = {255, 255, 255, 255};
+    renderText("STATISTICS", WINDOW_WIDTH / 2 - 100, 50, titleColor);
+    SDL_Color textColor = {200, 200, 200, 255};
     int y = 150;
-    // Music On/Off
-    string musicStr = string("Music: ") + (musicOn ? "ON" : "OFF");
-    renderText(musicStr, WINDOW_WIDTH / 2 - 120, y, textColor);
-    // Sound On/Off
-    y += 50;
-    string soundStr = string("Sound Effects: ") + (soundOn ? "ON" : "OFF");
-    renderText(soundStr, WINDOW_WIDTH / 2 - 120, y, textColor);
-    // Music Volume
-    y += 50;
-    string musicVolStr = "Music Volume: " + to_string(musicVolume);
-    renderText(musicVolStr, WINDOW_WIDTH / 2 - 120, y, textColor);
-    // Effects Volume
-    y += 50;
-    string effectsVolStr = "Effects Volume: " + to_string(effectsVolume);
-    renderText(effectsVolStr, WINDOW_WIDTH / 2 - 120, y, textColor);
+    renderText("Score: " + to_string(stats.score), WINDOW_WIDTH / 2 - 120, y, textColor);
+    y += 40;
+    renderText("Tanks destroyed: " + to_string(stats.tanksDestroyed), WINDOW_WIDTH / 2 - 120, y, textColor);
+    y += 40;
+    renderText("Bullets fired: " + to_string(stats.bulletsFired), WINDOW_WIDTH / 2 - 120, y, textColor);
+    y += 40;
+    renderText("Highest level: " + to_string(stats.level), WINDOW_WIDTH / 2 - 120, y, textColor);
     // Back button
     SDL_Color buttonColor = {100, 100, 100, 255};
     SDL_Rect buttonRect = {

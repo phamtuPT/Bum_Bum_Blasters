@@ -72,8 +72,10 @@ private:
     // Settings
     bool musicOn = true;
     bool soundOn = true;
-    int musicVolume = 100; // 0-128 cho SDL_mixer
-    int effectsVolume = 100; // 0-128 cho SDL_mixer
+    int musicVolume = 100; // 0-100
+    int effectsVolume = 100; // 0-100
+    bool draggingMusicSlider = false;
+    bool draggingEffectsSlider = false;
 
 public:
     Game();
@@ -94,6 +96,7 @@ private:
     void handleGameEvents(SDL_Event& e);
     void handleTutorialEvents(SDL_Event& e);
     void handleSettingsEvents(SDL_Event& e);
+    void handleStatsEvents(SDL_Event& e);
     void useHealthPickup();
     void activateShield();
     void activateScreenShake(float intensity, Uint32 duration);
@@ -128,6 +131,7 @@ private:
     void renderPauseScreen();
     void renderTutorialScreen();
     void renderSettingsScreen();
+    void renderStatsScreen();
 };
 
 #endif // !GAME_H

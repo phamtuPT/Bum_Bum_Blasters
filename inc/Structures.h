@@ -8,7 +8,8 @@ enum class GameState {
     PAUSED,
     GAME_OVER,
     TUTORIAL_SCREEN,
-    SETTINGS_SCREEN
+    SETTINGS_SCREEN,
+    STATS_SCREEN
 };
 
 // Enemy types
