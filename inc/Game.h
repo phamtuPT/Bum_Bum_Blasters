@@ -77,6 +77,9 @@ private:
     bool draggingMusicSlider = false;
     bool draggingEffectsSlider = false;
 
+    int highScore = 0;
+    int last5Scores[5] = {0, 0, 0, 0, 0};
+
 public:
     Game();
     ~Game();
@@ -132,6 +135,10 @@ private:
     void renderTutorialScreen();
     void renderSettingsScreen();
     void renderStatsScreen();
+    void loadStatsFromFile();
+    void saveStatsToFile();
+    void handleGameOverEvents(SDL_Event& e);
+    void updateStatsAfterGameOver();
 };
 
 #endif // !GAME_H

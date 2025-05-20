@@ -9,6 +9,7 @@
 #include <unordered_map>
 #include <vector>
 #include <algorithm>
+#include <fstream>
 
 using namespace std;
 
@@ -247,6 +248,8 @@ void Game::init(SDL_Renderer* rend, TTF_Font* f) {
     }
 
     initializeMenu();
+
+    loadStatsFromFile();
 }
 
 void Game::handleEvents(SDL_Event& e, bool& quit) {
@@ -270,6 +273,8 @@ void Game::handleEvents(SDL_Event& e, bool& quit) {
         handleGameEvents(e);
     } else if (state == GameState::PAUSED) {
         handlePauseEvents(e);
+    } else if (state == GameState::GAME_OVER) {
+        handleGameOverEvents(e);
     } else if (state == GameState::GAME_OVER && e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_r) {
         state = GameState::PLAYING;
         reset();
@@ -386,6 +391,7 @@ void Game::update(float deltaTime) {
 
     // Check game over condition
     if (!player.alive) {
+        updateStatsAfterGameOver();
         state = GameState::GAME_OVER;
     }
 }
@@ -1519,6 +1525,8 @@ void Game::reset() {
     gameTime = 0.0f;
     normalCameraZoom = 1.0f;
     currentCameraZoom = 1.0f;
+
+    // Xoá cập nhật stats ở đây vì đã chuyển sang updateStatsAfterGameOver
 }
 
 void Game::renderGame() {
@@ -1958,20 +1966,43 @@ void Game::renderGameOver() {
         SDL_DestroyTexture(scoreTexture);
     }
 
-    // Restart prompt
-    SDL_Color whiteColor = {255, 255, 255, 255};
-    SDL_Surface* restartSurface = TTF_RenderText_Solid(font, "Press R to Restart", whiteColor);
-    if (restartSurface) {
-        SDL_Texture* restartTexture = SDL_CreateTextureFromSurface(renderer, restartSurface);
-        SDL_Rect restartRect = {
-            WINDOW_WIDTH / 2 - restartSurface->w / 2,
-            WINDOW_HEIGHT / 2 + 50,
-            restartSurface->w,
-            restartSurface->h
+    // Nút Restart
+    SDL_Color buttonColor = {100, 100, 100, 255};
+    SDL_Rect restartButton = {
+        WINDOW_WIDTH / 2 - BUTTON_WIDTH - 10, WINDOW_HEIGHT / 2 + 60, BUTTON_WIDTH, BUTTON_HEIGHT
+    };
+    SDL_SetRenderDrawColor(renderer, buttonColor.r, buttonColor.g, buttonColor.b, buttonColor.a);
+    SDL_RenderFillRect(renderer, &restartButton);
+    renderText("RESTART", restartButton.x + BUTTON_WIDTH / 2 - 50, restartButton.y + BUTTON_HEIGHT / 2 - 15, {255,255,255,255});
+
+    // Nút Menu
+    SDL_Rect menuButton = {
+        WINDOW_WIDTH / 2 + 10, WINDOW_HEIGHT / 2 + 60, BUTTON_WIDTH, BUTTON_HEIGHT
+    };
+    SDL_SetRenderDrawColor(renderer, buttonColor.r, buttonColor.g, buttonColor.b, buttonColor.a);
+    SDL_RenderFillRect(renderer, &menuButton);
+    renderText("MENU", menuButton.x + BUTTON_WIDTH / 2 - 35, menuButton.y + BUTTON_HEIGHT / 2 - 15, {255,255,255,255});
+}
+
+// Xử lý sự kiện cho nút Game Over
+void Game::handleGameOverEvents(SDL_Event& e) {
+    if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+        int mouseX, mouseY;
+        SDL_GetMouseState(&mouseX, &mouseY);
+        SDL_Rect restartButton = {
+            WINDOW_WIDTH / 2 - BUTTON_WIDTH - 10, WINDOW_HEIGHT / 2 + 60, BUTTON_WIDTH, BUTTON_HEIGHT
         };
-        SDL_RenderCopy(renderer, restartTexture, nullptr, &restartRect);
-        SDL_FreeSurface(restartSurface);
-        SDL_DestroyTexture(restartTexture);
+        SDL_Rect menuButton = {
+            WINDOW_WIDTH / 2 + 10, WINDOW_HEIGHT / 2 + 60, BUTTON_WIDTH, BUTTON_HEIGHT
+        };
+        if (mouseX >= restartButton.x && mouseX <= restartButton.x + BUTTON_WIDTH &&
+            mouseY >= restartButton.y && mouseY <= restartButton.y + BUTTON_HEIGHT) {
+            state = GameState::PLAYING;
+            reset();
+        } else if (mouseX >= menuButton.x && mouseX <= menuButton.x + BUTTON_WIDTH &&
+                   mouseY >= menuButton.y && mouseY <= menuButton.y + BUTTON_HEIGHT) {
+            state = GameState::MENU;
+        }
     }
 }
 
@@ -2421,7 +2452,9 @@ void Game::renderStatsScreen() {
     SDL_Color titleColor = {255, 255, 255, 255};
     renderText("STATISTICS", WINDOW_WIDTH / 2 - 100, 50, titleColor);
     SDL_Color textColor = {200, 200, 200, 255};
-    int y = 150;
+    int y = 120;
+    renderText("High Score: " + to_string(highScore), WINDOW_WIDTH / 2 - 120, y, textColor);
+    y += 40;
     renderText("Score: " + to_string(stats.score), WINDOW_WIDTH / 2 - 120, y, textColor);
     y += 40;
     renderText("Tanks destroyed: " + to_string(stats.tanksDestroyed), WINDOW_WIDTH / 2 - 120, y, textColor);
@@ -2429,6 +2462,13 @@ void Game::renderStatsScreen() {
     renderText("Bullets fired: " + to_string(stats.bulletsFired), WINDOW_WIDTH / 2 - 120, y, textColor);
     y += 40;
     renderText("Highest level: " + to_string(stats.level), WINDOW_WIDTH / 2 - 120, y, textColor);
+    y += 50;
+    renderText("Last 5 games:", WINDOW_WIDTH / 2 - 120, y, titleColor);
+    y += 35;
+    for (int i = 0; i < 5; ++i) {
+        renderText("Game " + to_string(i+1) + ": " + to_string(last5Scores[i]), WINDOW_WIDTH / 2 - 80, y, textColor);
+        y += 30;
+    }
     // Back button
     SDL_Color buttonColor = {100, 100, 100, 255};
     SDL_Rect buttonRect = {
@@ -2440,4 +2480,29 @@ void Game::renderStatsScreen() {
     SDL_SetRenderDrawColor(renderer, buttonColor.r, buttonColor.g, buttonColor.b, buttonColor.a);
     SDL_RenderFillRect(renderer, &buttonRect);
     renderText("BACK", WINDOW_WIDTH / 2 - 30, WINDOW_HEIGHT - BUTTON_HEIGHT - 10, titleColor);
+}
+
+void Game::loadStatsFromFile() {
+    std::ifstream fin("stats.txt");
+    if (fin) {
+        fin >> highScore;
+        for (int i = 0; i < 5; ++i) fin >> last5Scores[i];
+    }
+    fin.close();
+}
+
+void Game::saveStatsToFile() {
+    std::ofstream fout("stats.txt");
+    fout << highScore << " ";
+    for (int i = 0; i < 5; ++i) fout << last5Scores[i] << " ";
+    fout.close();
+}
+
+void Game::updateStatsAfterGameOver() {
+    if (stats.score > 0) {
+        if (stats.score > highScore) highScore = stats.score;
+        for (int i = 4; i > 0; --i) last5Scores[i] = last5Scores[i-1];
+        last5Scores[0] = stats.score;
+        saveStatsToFile();
+    }
 }
