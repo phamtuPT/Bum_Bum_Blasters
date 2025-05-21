@@ -14,7 +14,7 @@ Trong BÙM BUM BLASTERS, bạn sẽ điều khiển một chiếc xe tăng trong
 ### 1. Lối chơi độc đáo
 
 <p align="center">
-  <img src="[https://i.imgur.com/J2EYArU.png](https://cdn-img.upanhlaylink.com/view/image_20250521de293f0e82b54c8175abf9da707efd13.jpg)" alt="Logo">
+  <img src="https://cdn-img.upanhlaylink.com/view/image_20250521de293f0e82b54c8175abf9da707efd13.jpg" alt="Gameplay">
 </p>
 
 Game có các tính năng nổi bật:
