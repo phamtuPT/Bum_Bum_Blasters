@@ -30,9 +30,9 @@ void PowerUp::render(SDL_Renderer* renderer, float cameraX, float cameraY) {
         size
     };
 
-    // Different colors for different power-up types
+
     if (type == PowerUpType::HEALTH_PICKUP) {
-        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255); // Red for health pickup
+        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255); 
     } else {
         SDL_SetRenderDrawColor(
             renderer,
@@ -44,7 +44,6 @@ void PowerUp::render(SDL_Renderer* renderer, float cameraX, float cameraY) {
     }
 
     if (texture) {
-        // Set color mod for health pickup
         if (type == PowerUpType::HEALTH_PICKUP) {
             SDL_SetTextureColorMod(texture, 255, 100, 100);
         } else {
@@ -53,7 +52,6 @@ void PowerUp::render(SDL_Renderer* renderer, float cameraX, float cameraY) {
 
         SDL_RenderCopy(renderer, texture, nullptr, &destRect);
     } else {
-        // Fallback if texture not available
         SDL_RenderFillRect(renderer, &destRect);
     }
 }

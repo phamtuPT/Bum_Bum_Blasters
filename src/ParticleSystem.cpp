@@ -49,7 +49,6 @@ void ParticleSystem::emitCircle(float x, float y, float radius, int count, SDL_C
     mt19937 rng(chrono::steady_clock::now().time_since_epoch().count());
 
     for (int i = 0; i < count; ++i) {
-        // Find inactive particle
         for (auto& p : particles) {
             if (!p.active) {
                 float angle = angleDist(rng);
@@ -57,7 +56,6 @@ void ParticleSystem::emitCircle(float x, float y, float radius, int count, SDL_C
                 p.x = x + cos(angle) * particleRadius;
                 p.y = y + sin(angle) * particleRadius;
 
-                // Particles move slightly outward
                 float speed = speedDist(rng);
                 p.vx = cos(angle) * speed;
                 p.vy = sin(angle) * speed;
@@ -88,7 +86,6 @@ void ParticleSystem::update() {
 void ParticleSystem::render(SDL_Renderer* renderer, float cameraX, float cameraY) {
     for (const auto& p : particles) {
         if (p.active) {
-            // Fade out based on remaining life
             float alpha = static_cast<float>(p.life) / p.maxLife;
             SDL_SetRenderDrawColor(
                 renderer,

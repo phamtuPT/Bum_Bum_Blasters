@@ -11,7 +11,7 @@ Tank::Tank(float x_, float y_, SDL_Texture* tex, EnemyType type_)
       speed(1.0f), damage(10), type(type_), isPlayer(false),
       specialBullets(0), isSpecialActive(false), specialActivationTimer(0),
       healthPickups(0), isRegeneratingHealth(false), healthRegenTimer(0), healthRegenTickTimer(0) {
-    // Adjust properties based on enemy type
+
     if (type == EnemyType::FAST) {
         speed = 1.5f;
         hp = 70;
@@ -36,7 +36,6 @@ void Tank::update(float deltaTime) {
         return;
     }
 
-    // Limit maximum velocity to prevent jitter
     float maxSpeed = speed * 3.0f;
     if (vx > maxSpeed) vx = maxSpeed;
     if (vx < -maxSpeed) vx = -maxSpeed;
@@ -46,33 +45,33 @@ void Tank::update(float deltaTime) {
     x += vx * deltaTime * 60.0f;
     y += vy * deltaTime * 60.0f;
 
-    // Smooth deceleration
+
     vx *= 0.95f;
     vy *= 0.95f;
 
-    // Set velocity to 0 if it's very small
+
     if (abs(vx) < 0.01f) vx = 0;
     if (abs(vy) < 0.01f) vy = 0;
 
-    // Update shield animation if active
+
     Uint32 currentTime = SDL_GetTicks();
     if (isShielding && currentTime - lastShieldFrameTime >= TANK_FRAME_DELAY) {
         shieldFrame = (shieldFrame + 1) % TANK_FRAME_COUNT;
         lastShieldFrameTime = currentTime;
     }
 
-    // Update health regeneration if active
+
     if (isRegeneratingHealth) {
         healthRegenTimer -= deltaTime;
         healthRegenTickTimer -= deltaTime;
 
         if (healthRegenTickTimer <= 0) {
-            // Reset tick timer
+
             healthRegenTickTimer = HEALTH_REGEN_TICK;
         }
 
         if (healthRegenTimer <= 0) {
-            // Regeneration complete
+
             isRegeneratingHealth = false;
         }
     }
@@ -85,16 +84,13 @@ void Tank::render(SDL_Renderer* renderer, float cameraX, float cameraY) {
 
     Uint32 currentTime = SDL_GetTicks();
 
-    // Determine which texture and frame to use
     SDL_Texture* currentTexture = texture;
     int frame = 0;
 
     if (isShielding && shieldTexture != nullptr) {
-        // Use shield texture with animation frames
         currentTexture = shieldTexture;
         frame = shieldFrame;
     } else if (isShooting) {
-        // Normal shooting animation
         if (currentTime - lastFrameTime >= TANK_FRAME_DELAY) {
             currentFrame++;
             if (currentFrame >= TANK_FRAME_COUNT) {
@@ -123,7 +119,7 @@ void Tank::render(SDL_Renderer* renderer, float cameraX, float cameraY) {
 
 void Tank::renderHealthBar(SDL_Renderer* renderer, float cameraX, float cameraY) {
     if (!alive || isPlayer) {
-        return; // Don't show health bar for player
+        return; 
     }
 
     int barWidth = width;
@@ -146,9 +142,8 @@ void Tank::renderHealthBar(SDL_Renderer* renderer, float cameraX, float cameraY)
     SDL_RenderFillRect(renderer, &hpRect);
 }
 
-// Get bullet spawn position (for both regular and special bullets)
+
 void Tank::getBulletSpawnPosition(float& outX, float& outY) {
-    // Calculate position at the front of the tank barrel
     outX = x + collisionRadius * cos(angle);
     outY = y + collisionRadius * sin(angle);
 }

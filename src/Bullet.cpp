@@ -24,12 +24,10 @@ void Bullet::render(SDL_Renderer* renderer, float cameraX, float cameraY) {
     }
 
     if (isSpecial) {
-        // Special bullets are larger and purple
         SDL_SetRenderDrawColor(renderer, 255, 0, 255, 255);
         SDL_Rect rect = {static_cast<int>(x - 5 - cameraX), static_cast<int>(y - 5 - cameraY), 10, 10};
         SDL_RenderFillRect(renderer, &rect);
     } else {
-        // Regular bullets
         SDL_SetRenderDrawColor(renderer, fromEnemy ? 0 : 255, 0, fromEnemy ? 255 : 0, 255);
         SDL_Rect rect = {static_cast<int>(x - 3 - cameraX), static_cast<int>(y - 3 - cameraY), 6, 6};
         SDL_RenderFillRect(renderer, &rect);

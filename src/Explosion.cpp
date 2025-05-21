@@ -21,9 +21,8 @@ void Explosion::render(SDL_Renderer* renderer, float cameraX, float cameraY) {
         return;
     }
 
-    // Use texture for explosion instead of pixel-by-pixel rendering
+
     if (texture) {
-        // Special explosions are larger
         int size = static_cast<int>(EXPLOSION_RADIUS * 2 * (1.0f - progress * 0.5f) * (isSpecial ? 2.0f : 1.0f));
         SDL_Rect destRect = {
             static_cast<int>(x - size / 2 - cameraX),
@@ -32,10 +31,8 @@ void Explosion::render(SDL_Renderer* renderer, float cameraX, float cameraY) {
             size
         };
 
-        // Set alpha based on progress
         SDL_SetTextureAlphaMod(texture, static_cast<Uint8>(255 * (1.0f - progress)));
 
-        // Special explosions have a purple tint
         if (isSpecial) {
             SDL_SetTextureColorMod(texture, 255, 100, 255);
         } else {
@@ -44,7 +41,6 @@ void Explosion::render(SDL_Renderer* renderer, float cameraX, float cameraY) {
 
         SDL_RenderCopy(renderer, texture, nullptr, &destRect);
     } else {
-        // Fallback to original rendering if texture not available
         int red = 255;
         int green = static_cast<int>(255 * progress);
         int blue = isSpecial ? 255 : 0;
@@ -53,7 +49,6 @@ void Explosion::render(SDL_Renderer* renderer, float cameraX, float cameraY) {
         int centerX = static_cast<int>(x - cameraX);
         int centerY = static_cast<int>(y - cameraY);
 
-        // Draw filled circle
         for (int w = 0; w < radius * 2; w++) {
             for (int h = 0; h < radius * 2; h++) {
                 int dx = w - radius;

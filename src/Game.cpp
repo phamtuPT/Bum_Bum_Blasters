@@ -68,28 +68,24 @@ Game::~Game() {
     }
     menuButtons.clear();
 
-    // Resources are cleaned up by ResourceManager
     ResourceManager::cleanup();
 }
 
 int Game::run() {
-    // Initialize random number generator
     srand(static_cast<unsigned>(time(nullptr)));
 
-    // Initialize SDL
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
         cerr << "SDL could not initialize! SDL_Error: " << SDL_GetError() << endl;
         return 1;
     }
 
-    // Initialize SDL_image
+
     if (!(IMG_Init(IMG_INIT_PNG) & IMG_INIT_PNG)) {
         cerr << "SDL_image could not initialize! SDL_image Error: " << IMG_GetError() << endl;
         SDL_Quit();
         return 1;
     }
 
-    // Initialize SDL_mixer
     if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048) < 0) {
         cerr << "SDL_mixer could not initialize! SDL_mixer Error: " << Mix_GetError() << endl;
         IMG_Quit();
@@ -97,7 +93,7 @@ int Game::run() {
         return 1;
     }
 
-    // Initialize SDL_ttf
+
     if (TTF_Init() < 0) {
         cerr << "SDL_ttf could not initialize! TTF_Error: " << TTF_GetError() << endl;
         Mix_Quit();
@@ -106,7 +102,6 @@ int Game::run() {
         return 1;
     }
 
-    // Create window
     SDL_Window* window = SDL_CreateWindow("Bùm Bum Blasters!!!", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
                                          WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_SHOWN);
     if (!window) {
@@ -118,7 +113,6 @@ int Game::run() {
         return 1;
     }
 
-    // Create renderer
     SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     if (!renderer) {
         cerr << "Renderer could not be created! SDL_Error: " << SDL_GetError() << endl;
@@ -130,7 +124,6 @@ int Game::run() {
         return 1;
     }
 
-    // Load font
     TTF_Font* font = TTF_OpenFont("assets/fonts/VCR_OSD_MONO_1.001.ttf", 24);
     if (!font) {
         cerr << "Failed to load font! TTF_Error: " << TTF_GetError() << endl;
@@ -143,10 +136,9 @@ int Game::run() {
         return 1;
     }
 
-    // Initialize game
     init(renderer, font);
 
-    // Game loop variables
+
     bool quit = false;
     SDL_Event e;
     Uint32 lastTime = SDL_GetTicks();
@@ -155,27 +147,26 @@ int Game::run() {
 
     // Game loop
     while (!quit) {
-        // Handle events
         while (SDL_PollEvent(&e) != 0) {
             handleEvents(e, quit);
         }
 
-        // Calculate delta time
+
         currentTime = SDL_GetTicks();
         deltaTime = (currentTime - lastTime) / 1000.0f;
         lastTime = currentTime;
 
-        // Update game
+
         update(deltaTime);
 
-        // Render game
+
         render();
 
-        // Cap frame rate
+
         SDL_Delay(16);
     }
 
-    // Clean up
+
     TTF_CloseFont(font);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
@@ -229,8 +220,7 @@ void Game::init(SDL_Renderer* rend, TTF_Font* f) {
     backgroundMusic = ResourceManager::getMusic("assets/sounds/background_music.mp3");
     buttonHoverSound = ResourceManager::getSound("assets/sounds/button_hover.mp3");
 
-    // Create a recolored version of the tank texture for shield effect
-    // This creates a green-tinted version of the tank
+
     playerShieldTexture = ResourceManager::createRecoloredTexture(
         "assets/images/tank/player/tank_shoot_spritesheet.png",
         "assets/images/tank/player/tank_shield_spritesheet.png",
@@ -240,9 +230,8 @@ void Game::init(SDL_Renderer* rend, TTF_Font* f) {
 
     player.texture = playerTexture;
     player.shieldTexture = playerShieldTexture;
-    player.isPlayer = true; // Set player flag
+    player.isPlayer = true; 
 
-    // Start background music
     if (backgroundMusic) {
         Mix_PlayMusic(backgroundMusic, -1);
     }
@@ -251,7 +240,7 @@ void Game::init(SDL_Renderer* rend, TTF_Font* f) {
 
     loadStatsFromFile();
     loadSettingsFromFile();
-    // Áp dụng trạng thái nhạc nền và hiệu ứng đúng với settings
+
     if (musicOn) {
         Mix_VolumeMusic(musicVolume * 128 / 100);
         Mix_ResumeMusic();
@@ -265,7 +254,7 @@ void Game::init(SDL_Renderer* rend, TTF_Font* f) {
     }
 
     startGameSound = ResourceManager::getSound("assets/sounds/start_game.mp3");
-    if (!startGameSound) std::cout << "Không load được startGameSound!" << std::endl;
+    if (!startGameSound) std::cout << "Khong load duoc sound" << std::endl;
 }
 
 void Game::handleEvents(SDL_Event& e, bool& quit) {
@@ -310,19 +299,15 @@ void Game::update(float deltaTime) {
 
     gameTime += deltaTime;
 
-    // Update player
     player.update(deltaTime);
     handleWallBounce(player);
     handleRapidFire(deltaTime);
     handleSpecialAbility(deltaTime);
 
-    // Update health regeneration info
     updateHealthRegenInfo(deltaTime);
 
-    // Update difficulty based on time
     updateDifficulty();
 
-    // Spawn enemies
     Uint32 currentTime = SDL_GetTicks();
     int maxEnemies = ENEMY_COUNT_MAX + (difficulty - 1);
     if (currentTime - lastSpawnTime >= ENEMY_SPAWN_INTERVAL / difficulty && enemies.size() < maxEnemies) {
@@ -330,19 +315,16 @@ void Game::update(float deltaTime) {
         lastSpawnTime = currentTime;
     }
 
-    // Spawn power-ups
     if (currentTime - lastPowerUpTime >= 15000 && powerups.size() < 3) {
         spawnPowerUp();
         lastPowerUpTime = currentTime;
     }
 
-    // Spawn health pickups
     if (currentTime - lastHealthPickupTime >= HEALTH_PICKUP_SPAWN_INTERVAL) {
         spawnHealthPickup();
         lastHealthPickupTime = currentTime;
     }
 
-    // Update enemies
     for (auto& enemy : enemies) {
         if (enemy.alive) {
             updateEnemyBehavior(enemy, deltaTime);
@@ -352,15 +334,12 @@ void Game::update(float deltaTime) {
         }
     }
 
-    // Update bullets
     for (auto& bullet : bullets) {
         bullet.update(deltaTime);
     }
 
-    // Update particles
     particles.update();
 
-    // Update kill notifications
     for (auto& notification : killNotifications) {
         notification.update();
     }
@@ -370,13 +349,10 @@ void Game::update(float deltaTime) {
         killNotifications.end()
     );
 
-    // Handle collisions
     handleCollisions();
 
-    // Clean up inactive objects
     cleanup();
 
-    // Update camera
     updateCamera();
 
     // Update shield cooldown
