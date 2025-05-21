@@ -10,6 +10,33 @@
 
 ## II. Tổng quan
 Trong BÙM BUM BLASTERS, bạn sẽ điều khiển một chiếc xe tăng trong một bản đồ rộng lớn, đối đầu với các kẻ thù từ cơ bản đến siêu dai (Basic, Fast, Heavy). Mục tiêu là tiêu diệt càng nhiều kẻ thù càng tốt, thu thập các vật phẩm và sống sót để đạt điểm số cao nhất. 
+
+- Menu
+<p align="center">
+  <img src="https://cdn-img.upanhlaylink.com/img/image_20250521d75971b1def78d6be77623624ee7dab4.jpg" alt="Gameplay">
+</p>
+
+- Thống kê điểm cao nhất và lịch sử điểm 5 ván chơi gần nhất
+<p align="center">
+  <img src="https://cdn-img.upanhlaylink.com/img/image_20250521fed8740226eabc6f5a3cad8d3a93ef57.jpg" alt="Gameplay">
+</p>
+
+- Hướng dẫn chơi
+
+<p align="center">
+  <img src="https://cdn-img.upanhlaylink.com/img/image_20250521ca8b4b61f90db1181dfbf29592fc56aa.jpg" alt="Gameplay">
+</p>
+
+- Settings
+<p align="center">
+  <img src="https://cdn-img.upanhlaylink.com/img/image_202505215700364d9ca9ca96d33a4053a3c5249b.jpg" alt="Gameplay">
+</p>
+
+- Giao diện game
+<p align="center">
+  <img src="https://cdn-img.upanhlaylink.com/img/image_20250521f0c6ec7d98c0ddc958b051598000d195.jpg" alt="Gameplay">
+</p>
+
 ## III. Đặc điểm nổi bật
 ### 1. Lối chơi độc đáo
 
