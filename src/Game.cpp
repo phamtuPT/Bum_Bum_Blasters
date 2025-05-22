@@ -429,37 +429,32 @@ void Game::handleSpecialAbility(float deltaTime) {
     }
 
     if (rightMouseHeld && player.specialBullets > 0) {
-        // Immediately activate special mode when right mouse is pressed
         if (!player.isSpecialActive) {
             player.isSpecialActive = true;
         }
 
         player.specialActivationTimer += deltaTime;
 
-        // Limit the maximum activation time to 3 seconds
         player.specialActivationTimer = min(player.specialActivationTimer, 3.0f);
 
-        // Gradually zoom out camera based on activation time
+
         float zoomProgress = player.specialActivationTimer / 3.0f;
         currentCameraZoom = normalCameraZoom + (SPECIAL_ZOOM_FACTOR - normalCameraZoom) * zoomProgress;
     } else if (player.isSpecialActive) {
-        // Right mouse was released after being in special mode
 
-        // Only fire if held for at least 0.5 seconds
         if (player.specialActivationTimer >= 0.5f) {
-            // Get bullet spawn position (same as regular bullets)
+
             float bulletX, bulletY;
             player.getBulletSpawnPosition(bulletX, bulletY);
 
-            // Fire special bullet
             Bullet bullet(
                 bulletX, bulletY,
                 BULLET_SPEED * 1.5f * cos(player.angle),
                 BULLET_SPEED * 1.5f * sin(player.angle),
                 false,
-                1000, // Very high damage to one-shot enemies
+                1000, 
                 true
-            ); // Mark as special bullet
+            ); 
 
             bullets.push_back(bullet);
             player.specialBullets--;
@@ -495,19 +490,15 @@ void Game::renderSpecialTargetingLine() {
         return;
     }
 
-    // Calculate line length based on activation time (max at 3 seconds)
     float lineProgress = min(player.specialActivationTimer / 3.0f, 1.0f);
     int lineLength = static_cast<int>(SPECIAL_LINE_LENGTH * lineProgress);
 
-    // Get bullet spawn position (same as regular bullets)
     float bulletX, bulletY;
     player.getBulletSpawnPosition(bulletX, bulletY);
 
-    // Convert to screen coordinates
     int startX = static_cast<int>(bulletX - cameraX);
     int startY = static_cast<int>(bulletY - cameraY);
 
-    // Calculate end point - vertical bisector along tank's length
     int endX = startX + static_cast<int>(cos(player.angle) * lineLength);
     int endY = startY + static_cast<int>(sin(player.angle) * lineLength);
 
