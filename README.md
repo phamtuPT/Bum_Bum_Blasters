@@ -5,8 +5,7 @@
 </p>
 
 ## I. Thông tin tác giả
-- Họ và tên: Phạm Đình Tú  
-- MSSV: 24021653
+- Họ và tên: Pahm
 
 ## II. Tổng quan
 Trong BÙM BUM BLASTERS, bạn sẽ điều khiển một chiếc xe tăng trong một bản đồ rộng lớn, đối đầu với các kẻ thù từ cơ bản đến siêu dai (Basic, Fast, Heavy). Mục tiêu là tiêu diệt càng nhiều kẻ thù càng tốt, thu thập các vật phẩm và sống sót để đạt điểm số cao nhất. 
